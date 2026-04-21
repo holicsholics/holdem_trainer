@@ -1,0 +1,1472 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MTT GTO 트레이너</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  *{box-sizing:border-box}
+  body{background:#05070f;color:#f8fafc;font-family:'Pretendard',-apple-system,BlinkMacSystemFont,system-ui,'Segoe UI',sans-serif;overflow:hidden;margin:0;font-weight:500;letter-spacing:-.01em;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  b,strong{font-weight:800;color:#fff}
+
+  /* 배경 */
+  .bg-room{
+    background:
+      radial-gradient(ellipse at top, #1e1b4b 0%, transparent 50%),
+      radial-gradient(ellipse at bottom right, #0c4a6e 0%, transparent 50%),
+      radial-gradient(ellipse at bottom left, #4c1d95 0%, transparent 50%),
+      #05070f;
+  }
+
+  /* 테이블 펠트 */
+  .felt{
+    background:
+      radial-gradient(ellipse 65% 55% at 50% 45%, #1e7c40 0%, #0f5528 40%, #072f14 100%);
+    border-radius:50%;
+    box-shadow:
+      inset 0 0 120px rgba(0,0,0,.8),
+      inset 0 0 60px rgba(255,215,0,.05),
+      0 0 0 14px #3e2a14,
+      0 0 0 18px #78350f,
+      0 0 0 20px #1c1917,
+      0 30px 80px rgba(0,0,0,.7);
+    position:relative;
+  }
+  .felt::before{
+    content:'';position:absolute;inset:20px;border-radius:50%;
+    border:1px dashed rgba(255,255,255,.06);pointer-events:none;
+  }
+  .felt-logo{
+    position:absolute;left:50%;top:58%;transform:translate(-50%,-50%);
+    font-size:48px;font-weight:900;color:rgba(255,255,255,.04);
+    letter-spacing:.1em;pointer-events:none;user-select:none;
+  }
+
+  /* 카드 */
+  .card{
+    display:inline-flex;align-items:center;justify-content:center;flex-direction:column;
+    background:linear-gradient(145deg,#fefefe,#e2e8f0);color:#0f172a;
+    border-radius:7px;width:46px;height:66px;font-weight:800;font-size:20px;line-height:1;
+    box-shadow:0 4px 10px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.7);
+    user-select:none;position:relative;border:1px solid rgba(0,0,0,.1);
+  }
+  .card .rank{font-size:22px;line-height:1}
+  .card .suit{font-size:20px;line-height:1;margin-top:1px}
+  .card.red{color:#dc2626}
+  .card.small{width:34px;height:48px;font-size:14px}
+  .card.small .rank{font-size:15px}
+  .card.small .suit{font-size:14px}
+  .card.back{
+    background:
+      repeating-linear-gradient(45deg,#1e1b4b 0,#1e1b4b 5px,#312e81 5px,#312e81 10px);
+    border:2px solid #0f0c29;
+  }
+  .card.back::before{
+    content:'♠';position:absolute;color:rgba(251,191,36,.6);font-size:24px;
+    left:50%;top:50%;transform:translate(-50%,-50%);
+  }
+  @keyframes dealIn{
+    from{transform:translate(0,-80px) rotate(180deg) scale(.5);opacity:0}
+    to{transform:none;opacity:1}
+  }
+  @keyframes flipReveal{
+    0%{transform:rotateY(180deg)}
+    100%{transform:rotateY(0)}
+  }
+  .card-enter{animation:dealIn .35s cubic-bezier(.22,.9,.3,1.2)}
+
+  /* 좌석 */
+  .seat{
+    position:absolute;transform:translate(-50%,-50%);
+    background:linear-gradient(180deg,rgba(30,41,59,.96),rgba(15,23,42,.98));
+    backdrop-filter:blur(8px);
+    border:1.5px solid rgba(100,116,139,.4);
+    border-radius:14px;padding:8px 12px;min-width:140px;
+    box-shadow:0 6px 16px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.08);
+    transition:all .25s ease;
+  }
+  .seat.active{
+    border-color:#fbbf24;
+    box-shadow:0 0 0 2px rgba(251,191,36,.4),0 0 24px rgba(251,191,36,.5),inset 0 1px 0 rgba(255,255,255,.1);
+    transform:translate(-50%,-50%) scale(1.04);
+  }
+  .seat.folded{opacity:.35;filter:grayscale(.8)}
+  .seat.hero{border-color:#60a5fa;box-shadow:0 0 0 1px rgba(96,165,250,.4),0 6px 16px rgba(0,0,0,.5)}
+  .seat.hero.active{border-color:#fbbf24;box-shadow:0 0 0 2px rgba(251,191,36,.5),0 0 30px rgba(251,191,36,.7)}
+  .seat.winner{
+    border-color:#10b981;animation:winPulse 1.2s ease-in-out infinite;
+  }
+  @keyframes winPulse{
+    0%,100%{box-shadow:0 0 0 2px rgba(16,185,129,.4),0 0 20px rgba(16,185,129,.5)}
+    50%{box-shadow:0 0 0 4px rgba(16,185,129,.7),0 0 40px rgba(16,185,129,.9)}
+  }
+  .seat-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+  .seat-name{font-weight:800;font-size:14px;color:#fff;letter-spacing:-.01em}
+  .seat-cards{display:flex;gap:3px;justify-content:center;margin:4px 0;min-height:48px}
+  .seat-info{display:flex;align-items:center;justify-content:space-between;margin-top:4px}
+
+  .stack{
+    background:linear-gradient(180deg,#fbbf24,#d97706);color:#0c0a09;
+    border-radius:14px;padding:3px 10px;font-weight:800;font-size:12px;
+    box-shadow:0 2px 6px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.4);
+    letter-spacing:.02em;
+  }
+  .pos-tag{
+    font-size:10px;font-weight:700;color:#cbd5e1;
+    background:rgba(51,65,85,.8);padding:2px 7px;border-radius:8px;
+    letter-spacing:.05em;
+  }
+  .dealer-btn{
+    background:radial-gradient(circle at 30% 30%,#fff,#cbd5e1);color:#0c0a09;
+    border-radius:50%;width:24px;height:24px;
+    display:inline-flex;align-items:center;justify-content:center;
+    font-weight:900;font-size:12px;
+    box-shadow:0 3px 6px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.9);
+    border:1.5px solid #fbbf24;
+  }
+
+  /* 액션 말풍선 */
+  .bubble{
+    position:absolute;left:50%;top:-38px;transform:translateX(-50%);
+    padding:4px 12px;border-radius:16px;font-weight:800;font-size:12px;
+    white-space:nowrap;z-index:20;
+    box-shadow:0 4px 14px rgba(0,0,0,.5);
+    animation:bubbleIn .3s cubic-bezier(.22,.9,.3,1.4);
+  }
+  .bubble::after{
+    content:'';position:absolute;left:50%;bottom:-5px;transform:translateX(-50%);
+    border:5px solid transparent;border-top-color:inherit;
+  }
+  .bubble.fold{background:#991b1b;color:#fecaca;border:1px solid #dc2626}
+  .bubble.fold::after{border-top-color:#991b1b}
+  .bubble.check{background:#334155;color:#e2e8f0;border:1px solid #475569}
+  .bubble.check::after{border-top-color:#334155}
+  .bubble.call{background:#065f46;color:#d1fae5;border:1px solid #10b981}
+  .bubble.call::after{border-top-color:#065f46}
+  .bubble.raise{background:#1e40af;color:#dbeafe;border:1px solid #60a5fa}
+  .bubble.raise::after{border-top-color:#1e40af}
+  .bubble.allin{background:#6b21a8;color:#f3e8ff;border:1px solid #a855f7}
+  .bubble.allin::after{border-top-color:#6b21a8}
+  @keyframes bubbleIn{
+    from{transform:translateX(-50%) translateY(10px) scale(.7);opacity:0}
+    to{transform:translateX(-50%) translateY(0) scale(1);opacity:1}
+  }
+
+  /* 칩 (테이블 위 벳) */
+  .chip-bet{
+    position:absolute;transform:translate(-50%,-50%);
+    display:flex;align-items:center;gap:4px;
+    background:rgba(12,10,9,.85);color:#fbbf24;
+    border-radius:14px;padding:3px 10px;font-weight:800;font-size:12px;
+    border:1px solid rgba(251,191,36,.5);
+    box-shadow:0 3px 8px rgba(0,0,0,.5);
+    transition:all .3s ease;
+    z-index:5;
+  }
+  .chip-dot{
+    width:14px;height:14px;border-radius:50%;
+    background:radial-gradient(circle at 30% 30%,#fcd34d,#b45309);
+    border:2px dashed #fef3c7;
+    box-shadow:0 1px 3px rgba(0,0,0,.5);
+  }
+
+  /* 팟 */
+  .pot-display{
+    background:linear-gradient(180deg,rgba(0,0,0,.8),rgba(0,0,0,.6));
+    border:1.5px solid #fbbf24;border-radius:22px;padding:6px 20px;
+    color:#fde68a;font-weight:800;font-size:14px;
+    box-shadow:0 4px 16px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,215,0,.2);
+    letter-spacing:.03em;
+  }
+  .pot-display .num{color:#fef3c7;font-size:16px}
+
+  /* 보드 카드 영역 */
+  .board-area{
+    display:flex;gap:6px;padding:8px 12px;
+    background:rgba(0,0,0,.25);border-radius:10px;min-height:78px;
+    border:1px solid rgba(255,255,255,.06);
+  }
+
+  /* 액션 바 */
+  .action-bar{
+    background:linear-gradient(180deg,rgba(15,23,42,.95),rgba(2,6,23,.98));
+    backdrop-filter:blur(10px);
+    border:1px solid rgba(100,116,139,.3);border-radius:14px;
+    padding:12px 16px;display:flex;align-items:center;gap:10px;
+    box-shadow:0 -4px 24px rgba(0,0,0,.5);
+  }
+  .btn-action{
+    padding:10px 20px;border-radius:10px;font-weight:800;font-size:13px;
+    transition:all .15s;cursor:pointer;border:none;min-width:96px;
+    letter-spacing:.02em;text-transform:uppercase;
+    box-shadow:0 3px 8px rgba(0,0,0,.4);
+  }
+  .btn-action:hover:not(:disabled){transform:translateY(-2px);filter:brightness(1.15)}
+  .btn-action:active:not(:disabled){transform:translateY(0)}
+  .btn-action:disabled{opacity:.3;cursor:not-allowed;filter:grayscale(.7)}
+  .btn-fold{background:linear-gradient(180deg,#ef4444,#991b1b);color:#fff}
+  .btn-check{background:linear-gradient(180deg,#64748b,#334155);color:#fff}
+  .btn-call{background:linear-gradient(180deg,#10b981,#047857);color:#fff}
+  .btn-raise{background:linear-gradient(180deg,#3b82f6,#1e40af);color:#fff}
+  .btn-jam{background:linear-gradient(180deg,#a855f7,#6b21a8);color:#fff}
+  .btn-next{
+    background:linear-gradient(180deg,#fbbf24,#d97706);color:#1c1917;
+    padding:14px 36px;font-size:15px;
+  }
+
+  .slider-box{
+    background:rgba(2,6,23,.6);border:1px solid #334155;border-radius:10px;
+    padding:6px 12px;display:flex;align-items:center;gap:10px;
+  }
+  .slider-box input[type=range]{accent-color:#fbbf24;width:160px}
+  .bet-size-chips{display:flex;gap:4px}
+  .chip-preset{
+    padding:4px 10px;border-radius:6px;background:#1e293b;color:#cbd5e1;
+    font-size:11px;font-weight:700;border:1px solid #334155;cursor:pointer;
+  }
+  .chip-preset:hover{background:#334155;color:#fff}
+
+  /* 상단 바 */
+  .tourney-bar{
+    background:linear-gradient(90deg,#0f172a 0%,#1e1b4b 50%,#0f172a 100%);
+    border-bottom:1px solid rgba(251,191,36,.2);
+  }
+  .stat-pill{
+    background:rgba(30,41,59,.6);border:1px solid rgba(100,116,139,.3);
+    padding:4px 12px;border-radius:8px;font-size:12px;
+    display:inline-flex;align-items:center;gap:6px;
+  }
+  .stat-pill b{color:#fbbf24}
+
+  /* 코치 패널 */
+  .coach{
+    background:linear-gradient(180deg,#0a0f1e,#060913);
+    border-left:1px solid rgba(251,191,36,.15);
+    overflow-y:auto;
+  }
+  .coach-section{
+    border-bottom:1px solid rgba(30,41,59,.8);padding:14px 18px;
+  }
+  .coach-h{
+    font-size:10px;text-transform:uppercase;letter-spacing:.12em;
+    color:#fbbf24;margin-bottom:10px;font-weight:800;
+    display:flex;align-items:center;gap:6px;
+  }
+  .coach-h::before{content:'';width:3px;height:10px;background:#fbbf24;border-radius:2px}
+  .metric{
+    display:flex;justify-content:space-between;align-items:center;
+    margin:6px 0;font-size:13px;color:#e2e8f0;font-weight:600;
+  }
+  .metric-val{font-weight:800;color:#fff;font-size:13.5px}
+  .metric-val.good{color:#34d399}
+  .metric-val.bad{color:#f87171}
+  .metric-val.warn{color:#fbbf24}
+  .rec{
+    padding:12px 14px;border-radius:10px;margin:8px 0;
+    box-shadow:0 4px 12px rgba(0,0,0,.3);
+  }
+  .rec.go{background:linear-gradient(135deg,#1e40af,#3730a3);border-left:4px solid #60a5fa}
+  .rec.shove{background:linear-gradient(135deg,#7c2d12,#991b1b);border-left:4px solid #f87171}
+  .rec.fold{background:linear-gradient(135deg,#374151,#1f2937);border-left:4px solid #9ca3af}
+  .rec.mix{background:linear-gradient(135deg,#78350f,#92400e);border-left:4px solid #fbbf24}
+  .rec-action{font-weight:900;font-size:16px;color:#fff;margin-bottom:5px;letter-spacing:-.01em}
+  .rec-reason{font-size:12.5px;color:rgba(255,255,255,.95);line-height:1.55;font-weight:500}
+
+  .log-entry{
+    font-size:12px;color:#cbd5e1;padding:4px 0;
+    border-bottom:1px dotted rgba(51,65,85,.5);
+    line-height:1.4;font-weight:500;
+  }
+  .log-entry.hand{color:#fbbf24;font-weight:800}
+  .log-entry.win{color:#34d399;font-weight:800}
+
+  .range-grid{
+    display:grid;grid-template-columns:repeat(13,1fr);gap:1px;
+    background:#1e293b;padding:2px;border-radius:4px;
+  }
+  .range-cell{
+    aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+    font-size:8.5px;font-weight:700;background:#1e293b;color:#475569;
+    border-radius:1px;
+  }
+  .range-cell.in{background:linear-gradient(135deg,#16a34a,#15803d);color:#fff}
+  .range-cell.hero{
+    background:linear-gradient(135deg,#fbbf24,#d97706);color:#0c0a09;
+    box-shadow:inset 0 0 0 2px #fff,0 0 10px rgba(251,191,36,.8);
+    z-index:2;
+  }
+  /* Hero 액션 매트릭스 (GTO Wizard 스타일) */
+  .range-cell.a-allin{background:linear-gradient(135deg,#a855f7,#7e22ce);color:#fff}
+  .range-cell.a-raise{background:linear-gradient(135deg,#ef4444,#b91c1c);color:#fff}
+  .range-cell.a-call {background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:#fff}
+  .range-cell.a-mix  {background:linear-gradient(135deg,#fbbf24,#a16207);color:#0c0a09}
+  .range-cell.a-fold {background:#1e293b;color:#475569}
+  .range-cell.hero-me{
+    box-shadow:inset 0 0 0 2px #fff,0 0 8px rgba(255,255,255,.9);
+    z-index:2;outline:1px solid #fff;
+  }
+  .matrix-legend{display:flex;flex-wrap:wrap;gap:8px;font-size:10px;color:#94a3b8;margin-top:6px}
+  .matrix-legend span{display:flex;align-items:center;gap:3px}
+  .matrix-legend i{width:10px;height:10px;display:inline-block;border-radius:2px}
+
+  /* 결과 배너 */
+  .result-banner{
+    background:linear-gradient(90deg,rgba(16,185,129,.15),rgba(5,150,105,.25));
+    border:1px solid #10b981;border-left:4px solid #10b981;
+    padding:10px 14px;border-radius:8px;margin-bottom:8px;
+  }
+  .result-banner.lose{
+    background:linear-gradient(90deg,rgba(239,68,68,.1),rgba(127,29,29,.2));
+    border-color:#dc2626;border-left-color:#dc2626;
+  }
+
+  .modal-bg{background:rgba(0,0,0,.88);backdrop-filter:blur(8px)}
+  .modal-box{
+    background:linear-gradient(180deg,#1e293b,#0f172a);
+    border:1px solid rgba(251,191,36,.4);border-radius:14px;
+    box-shadow:0 20px 60px rgba(0,0,0,.8);padding:28px;max-width:440px;
+  }
+
+  /* 스크롤바 */
+  .scroll::-webkit-scrollbar{width:8px}
+  .scroll::-webkit-scrollbar-track{background:transparent}
+  .scroll::-webkit-scrollbar-thumb{background:#334155;border-radius:4px}
+  .scroll::-webkit-scrollbar-thumb:hover{background:#475569}
+
+  .fade-in{animation:fade .3s}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+</style>
+</head>
+<body class="h-screen flex flex-col bg-room">
+
+<!-- 상단 바 -->
+<div class="tourney-bar flex items-center justify-between px-6 py-3 text-sm">
+  <div class="flex items-center gap-3">
+    <span class="text-amber-400 font-black text-lg tracking-wider">♠ MTT GTO</span>
+    <span class="text-slate-600">│</span>
+    <span class="stat-pill">레벨 <b id="t-level">1</b></span>
+    <span class="stat-pill">블라인드 <b id="t-blinds">50/100</b></span>
+    <span id="t-ante-wrap" class="stat-pill hidden">앤티 <b id="t-ante">0</b></span>
+    <span class="stat-pill">핸드 <b id="t-hand">1</b></span>
+  </div>
+  <div class="flex items-center gap-3">
+    <span class="stat-pill">생존 <b id="t-alive">6</b>/6</span>
+    <span class="stat-pill">평균 <b id="t-avg">15K</b></span>
+    <span class="stat-pill">Hero <b id="t-rank">1</b>위</span>
+    <button id="btn-restart" class="btn-action" style="padding:6px 14px;font-size:11px;background:#475569;color:#fff">리셋</button>
+  </div>
+</div>
+
+<!-- 메인 -->
+<div class="flex-1 flex overflow-hidden">
+  <div class="flex-1 flex flex-col items-center justify-center p-4 gap-3 relative">
+    <div id="table" class="felt" style="width:820px;height:460px;position:relative">
+      <div class="felt-logo">MTT · GTO</div>
+      <div id="seats-layer" class="absolute inset-0 pointer-events-none"></div>
+      <div id="chips-layer" class="absolute inset-0 pointer-events-none"></div>
+      <div class="absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-3">
+        <div id="board" class="board-area"></div>
+        <div id="pot" class="pot-display">팟 <span class="num">0</span></div>
+      </div>
+    </div>
+
+    <div id="action-zone" class="flex items-center justify-center w-full" style="min-height:76px">
+      <!-- 액션 바 (히어로 턴) -->
+      <div id="action-bar" class="action-bar hidden">
+        <button class="btn-action btn-fold" data-act="fold">폴드</button>
+        <button class="btn-action btn-check" data-act="check">체크</button>
+        <button class="btn-action btn-call" data-act="call">콜</button>
+        <div class="slider-box">
+          <div class="bet-size-chips">
+            <button class="chip-preset" data-sz="0.5">½팟</button>
+            <button class="chip-preset" data-sz="0.66">⅔팟</button>
+            <button class="chip-preset" data-sz="1">1팟</button>
+            <button class="chip-preset" data-sz="2">2팟</button>
+          </div>
+          <input type="range" id="raise-slider" min="0" max="100" value="50">
+          <span id="raise-display" class="font-black text-amber-400 w-20 text-right text-base">0</span>
+        </div>
+        <button class="btn-action btn-raise" data-act="raise">레이즈</button>
+        <button class="btn-action btn-jam" data-act="allin">올인</button>
+      </div>
+
+      <!-- 다음 핸드 바 -->
+      <div id="next-bar" class="hidden fade-in">
+        <button id="btn-next-hand" class="btn-action btn-next">다음 핸드 ▶ <span class="text-xs opacity-70 ml-2">(Space)</span></button>
+      </div>
+
+      <!-- 안내 바 (봇 액션 대기 중) -->
+      <div id="wait-bar" class="text-slate-200 text-sm hidden font-semibold">
+        <span id="wait-text">상대 생각 중...</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 코치 패널 -->
+  <div id="coach" class="coach scroll" style="width:420px;height:100%">
+    <div id="c-banner"></div>
+    <div class="coach-section">
+      <div class="coach-h">현재 스팟</div>
+      <div id="c-spot" class="text-sm leading-relaxed space-y-1"></div>
+    </div>
+    <div class="coach-section">
+      <div class="coach-h">수학</div>
+      <div id="c-math"></div>
+    </div>
+    <div class="coach-section">
+      <div class="coach-h">GTO 추천</div>
+      <div id="c-rec"></div>
+    </div>
+    <div class="coach-section">
+      <div class="coach-h">상대 레인지</div>
+      <div id="c-range-text" class="text-xs text-slate-400 mb-2 font-mono leading-tight"></div>
+      <div id="c-range-grid" class="range-grid"></div>
+      <div class="text-[10px] text-slate-500 mt-2 flex gap-3">
+        <span><span class="inline-block w-2 h-2 bg-green-600 mr-1"></span>포함</span>
+        <span><span class="inline-block w-2 h-2 bg-amber-400 mr-1"></span>Hero 핸드</span>
+        <span><span class="inline-block w-2 h-2 bg-slate-600 mr-1"></span>제외</span>
+      </div>
+    </div>
+    <div class="coach-section">
+      <div class="coach-h">내 액션 매트릭스 (vs 상대 레인지)</div>
+      <div id="c-matrix-text" class="text-xs text-slate-400 mb-2 font-mono leading-tight"></div>
+      <div id="c-matrix-grid" class="range-grid"></div>
+      <div class="matrix-legend">
+        <span><i style="background:linear-gradient(135deg,#a855f7,#7e22ce)"></i>올인</span>
+        <span><i style="background:linear-gradient(135deg,#ef4444,#b91c1c)"></i>3-bet/Raise</span>
+        <span><i style="background:linear-gradient(135deg,#3b82f6,#1d4ed8)"></i>Call</span>
+        <span><i style="background:linear-gradient(135deg,#fbbf24,#a16207)"></i>믹스</span>
+        <span><i style="background:#1e293b;border:1px solid #334155"></i>Fold</span>
+      </div>
+    </div>
+    <div class="coach-section">
+      <div class="coach-h">ICM</div>
+      <div id="c-icm" class="text-xs leading-relaxed space-y-1"></div>
+    </div>
+    <div class="coach-section">
+      <div class="coach-h">핸드 로그</div>
+      <div id="c-log" class="max-h-40 overflow-y-auto scroll"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 모달 -->
+<div id="modal" class="fixed inset-0 modal-bg hidden flex items-center justify-center z-50">
+  <div class="modal-box">
+    <h2 id="modal-title" class="text-2xl font-black mb-3 text-amber-400"></h2>
+    <div id="modal-body" class="text-sm text-slate-300 mb-5 whitespace-pre-wrap leading-relaxed"></div>
+    <button id="modal-close" class="btn-action btn-next w-full">계속</button>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// DATA
+// ============================================================
+const BLINDS=[
+  {sb:50,bb:100,ante:0},{sb:75,bb:150,ante:20},{sb:100,bb:200,ante:25},
+  {sb:150,bb:300,ante:40},{sb:200,bb:400,ante:50},{sb:300,bb:600,ante:75},
+  {sb:400,bb:800,ante:100},{sb:600,bb:1200,ante:150},{sb:800,bb:1600,ante:200},
+  {sb:1200,bb:2400,ante:300}
+];
+const HANDS_PER_LEVEL=6,START_STACK=30000,NUM_PLAYERS=6;
+const BOT_NAMES=['Gus','Phil','Daniel','Vanessa','Doyle','Stu','Eli','Tom','Ivey'];
+
+// GTO Wizard 6-max MTT RFI 근사 (공개 GTO 표준 레인지 기반, mixed freq는 pure로 단순화)
+const OPEN_RANGES={
+  // 100bb deep (~18/24/30/48/40% RFI)
+  deep:{
+    UTG:'77+, A8s+, K9s+, QTs+, J9s+, T9s, 98s, 87s, 76s, ATo+, KJo+, QJo',
+    MP:'33+, A5s+, K8s+, Q9s+, J8s+, T8s+, 97s+, 86s+, 76s, 65s, A9o+, KTo+, QTo+, JTo',
+    CO:'22+, A2s+, K5s+, Q8s+, J8s+, T7s+, 96s+, 85s+, 75s+, 64s+, 53s+, A7o+, K9o+, Q9o+, J9o+, T9o',
+    BTN:'22+, A2s+, K2s+, Q4s+, J6s+, T6s+, 95s+, 85s+, 74s+, 64s+, 53s+, 43s, A2o+, K7o+, Q8o+, J8o+, T8o+, 97o+, 87o, 76o',
+    SB:'22+, A2s+, K5s+, Q7s+, J7s+, T7s+, 96s+, 85s+, 75s+, 64s+, 53s+, A2o+, K8o+, Q9o+, J9o+, T9o, 98o'
+  },
+  // 40bb mid (~16/22/26/42/36%)
+  mid:{
+    UTG:'55+, A9s+, KTs+, QTs+, J9s+, T9s, 98s, ATo+, KJo+, QJo',
+    MP:'22+, A7s+, K9s+, Q9s+, J9s+, T8s+, 97s+, 87s, 76s, A9o+, KTo+, QTo+, JTo',
+    CO:'22+, A3s+, K8s+, Q8s+, J8s+, T8s+, 97s+, 86s+, 76s, 65s, A8o+, KTo+, QTo+, JTo',
+    BTN:'22+, A2s+, K4s+, Q7s+, J7s+, T7s+, 96s+, 85s+, 75s+, 64s+, 53s+, A2o+, K8o+, Q9o+, J9o+, T9o',
+    SB:'22+, A2s+, K6s+, Q8s+, J8s+, T8s+, 97s+, 86s+, 76s, A5o+, K9o+, Q9o+, J9o+, T9o'
+  },
+  // 20bb shallow (~13/17/23/38/34%, 3-bet=commit)
+  shallow:{
+    UTG:'44+, ATs+, KJs+, QJs, JTs, AJo+, KQo',
+    MP:'33+, A8s+, KTs+, QTs+, J9s+, T9s, ATo+, KJo+, QJo',
+    CO:'22+, A5s+, K9s+, QTs+, J9s+, T9s, 98s, A9o+, KTo+, QJo',
+    BTN:'22+, A2s+, K7s+, Q8s+, J9s+, T8s+, 97s+, 87s, 76s, A5o+, K9o+, Q9o+, J9o+',
+    SB:'22+, A2s+, K5s+, Q8s+, J8s+, T8s+, 97s+, 87s, 76s, A2o+, K9o+, Q9o+, J9o+'
+  },
+  // 12bb push-heavy
+  push:{
+    UTG:'44+, A8s+, A9o+, KTs+, KJo+, QJs',
+    MP:'22+, A5s+, A8o+, K9s+, KTo+, Q9s+, QJo, JTs',
+    CO:'22+, A2s+, A5o+, K7s+, K9o+, Q8s+, QTo+, J8s+, JTo, T8s+, T9o, 97s+, 87s, 76s',
+    BTN:'22+, A2s+, A2o+, K3s+, K7o+, Q5s+, Q9o+, J7s+, J9o+, T7s+, T9o, 96s+, 85s+, 75s+, 65s, 54s',
+    SB:'22+, A2s+, A2o+, K2s+, K5o+, Q2s+, Q7o+, J4s+, J8o+, T6s+, T8o+, 95s+, 84s+, 74s+, 63s+, 54s'
+  },
+  // 8bb very-wide
+  tiny:{
+    UTG:'22+, A7s+, A9o+, K9s+, KJo+, QTs+, JTs',
+    MP:'22+, A4s+, A8o+, K7s+, KTo+, Q8s+, QJo, J8s+, T9s',
+    CO:'22+, A2s+, A2o+, K3s+, K8o+, Q5s+, QTo+, J6s+, JTo, T6s+, T9o, 95s+, 84s+, 75s+, 64s+, 54s',
+    BTN:'22+, A2s+, A2o+, K2s+, K5o+, Q2s+, Q7o+, J4s+, J8o+, T5s+, T8o+, 94s+, 98o, 84s+, 74s+, 63s+, 54s, 43s',
+    SB:'22+, A2s+, A2o+, K2s+, K2o+, Q2s+, Q5o+, J2s+, J7o+, T4s+, T7o+, 95s+, 97o+, 84s+, 87o, 74s+, 63s+, 54s, 43s'
+  }
+};
+// BB defend (call vs open). 3-bet/올인 레인지는 별도. 폴드는 나머지.
+const DEFEND_RANGES={
+  call_vs_open:{
+    deep:'22-JJ, A2s-AJs, K6s+, Q8s+, J8s+, T8s+, 97s+, 86s+, 76s, 65s, 54s, A7o-AQo, K9o+, QTo+, JTo, T9o, 98o',
+    mid:'22-JJ, A2s-AJs, K7s+, Q8s+, J8s+, T8s+, 97s+, 86s+, 76s, 65s, A8o-AJo, KTo+, QTo+, JTo',
+    shallow:'22-TT, A2s-AJs, K8s+, Q9s+, J9s+, T9s, 98s, 87s, 76s, A8o-AJo, KJo+, QJo'
+  },
+  threebet_vs_open:{
+    deep:'TT+, AJs+, KQs, AKo, A5s-A2s',
+    mid:'JJ+, AQs+, AKo, A5s, A4s',
+    shallow:'TT+, AQs+, AKo'
+  },
+  jam_vs_open:{
+    push:'77+, ATs+, AJo+, KQs',
+    tiny:'55+, A8s+, A9o+, KJs+, KQo, QJs'
+  }
+};
+
+// ============================================================
+// CARDS & EVAL
+// ============================================================
+const SUITS=['♣','♦','♥','♠'],SUIT_RED=[false,true,true,false],RANKS='23456789TJQKA';
+function makeDeck(){const d=[];for(let r=2;r<=14;r++)for(let s=0;s<4;s++)d.push({rank:r,suit:s,id:r*10+s});return d}
+function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function cardStr(c){return RANKS[c.rank-2]+SUITS[c.suit]}
+function cardHTML(c,small,fresh){
+  const cls=(small?'card small':'card')+(SUIT_RED[c.suit]?' red':'')+(fresh?' card-enter':'');
+  return `<div class="${cls}"><div class="rank">${RANKS[c.rank-2]}</div><div class="suit">${SUITS[c.suit]}</div></div>`;
+}
+function cardBack(small){return `<div class="card back ${small?'small':''}"></div>`}
+
+function evaluate5(cs){
+  const ranks=cs.map(c=>c.rank).sort((a,b)=>b-a);
+  const flush=cs.every(c=>c.suit===cs[0].suit);
+  const uniq=[...new Set(ranks)];
+  let straight=false,sh=0;
+  if(uniq.length===5){
+    if(uniq[0]-uniq[4]===4){straight=true;sh=uniq[0]}
+    else if(uniq[0]===14&&uniq[1]===5&&uniq[4]===2){straight=true;sh=5}
+  }
+  const cnt={};ranks.forEach(r=>cnt[r]=(cnt[r]||0)+1);
+  const bc=Object.entries(cnt).map(([r,n])=>[+r,n]).sort((a,b)=>b[1]-a[1]||b[0]-a[0]);
+  const pat=bc.map(e=>e[1]).join('');
+  if(straight&&flush)return{c:8,t:[sh]};
+  if(pat==='41')return{c:7,t:[bc[0][0],bc[1][0]]};
+  if(pat==='32')return{c:6,t:[bc[0][0],bc[1][0]]};
+  if(flush)return{c:5,t:ranks};
+  if(straight)return{c:4,t:[sh]};
+  if(pat==='311')return{c:3,t:[bc[0][0],bc[1][0],bc[2][0]]};
+  if(pat==='221')return{c:2,t:[bc[0][0],bc[1][0],bc[2][0]]};
+  if(pat==='2111')return{c:1,t:[bc[0][0],bc[1][0],bc[2][0],bc[3][0]]};
+  return{c:0,t:ranks};
+}
+function evaluate7(cards){
+  let best=null;const n=cards.length;
+  for(let a=0;a<n-4;a++)for(let b=a+1;b<n-3;b++)for(let c=b+1;c<n-2;c++)
+    for(let d=c+1;d<n-1;d++)for(let e=d+1;e<n;e++){
+      const h=evaluate5([cards[a],cards[b],cards[c],cards[d],cards[e]]);
+      if(!best||cmpH(h,best)>0)best=h;
+    }
+  return best;
+}
+function cmpH(a,b){if(a.c!==b.c)return a.c-b.c;for(let i=0;i<Math.max(a.t.length,b.t.length);i++){const d=(a.t[i]||0)-(b.t[i]||0);if(d)return d}return 0}
+const HAND_NAMES=['하이카드','원페어','투페어','트립스','스트레이트','플러시','풀하우스','포카드','스트레이트플러시'];
+
+// ============================================================
+// RANGE
+// ============================================================
+const RD='AKQJT98765432';
+function comboKey(combo){
+  const[a,b]=combo[0].rank>=combo[1].rank?[combo[0],combo[1]]:[combo[1],combo[0]];
+  const r1=RANKS[a.rank-2],r2=RANKS[b.rank-2];
+  if(a.rank===b.rank)return r1+r2;
+  return r1+r2+(a.suit===b.suit?'s':'o');
+}
+function expandRange(str){
+  const out=new Set();
+  str.split(',').map(s=>s.trim()).filter(Boolean).forEach(p=>{
+    if(p.endsWith('+'))expPlus(p.slice(0,-1),out);
+    else if(p.includes('-'))expDash(p,out);
+    else expSingle(p,out);
+  });
+  return out;
+}
+function expSingle(h,s){if(h.length===2){if(h[0]===h[1])s.add(h);else{s.add(h+'s');s.add(h+'o')}}else if(h.length===3)s.add(h)}
+function expPlus(b,s){
+  if(b.length===2&&b[0]===b[1]){const i=RD.indexOf(b[0]);for(let k=i;k>=0;k--)s.add(RD[k]+RD[k])}
+  else if(b.length===3){const t=RD.indexOf(b[0]),bt=RD.indexOf(b[1]);for(let k=bt;k>t;k--)s.add(b[0]+RD[k]+b[2])}
+  else if(b.length===2){const t=RD.indexOf(b[0]),bt=RD.indexOf(b[1]);for(let k=bt;k>t;k--){s.add(b[0]+RD[k]+'s');s.add(b[0]+RD[k]+'o')}}
+}
+function expDash(p,s){
+  const[f,t]=p.split('-');
+  if(f.length===2&&f[0]===f[1]&&t.length===2&&t[0]===t[1]){
+    const fi=RD.indexOf(f[0]),ti=RD.indexOf(t[0]),lo=Math.max(fi,ti),hi=Math.min(fi,ti);
+    for(let i=hi;i<=lo;i++)s.add(RD[i]+RD[i]);
+  }else if(f.length===3&&t.length===3&&f[0]===t[0]&&f[2]===t[2]){
+    const fi=RD.indexOf(f[1]),ti=RD.indexOf(t[1]),lo=Math.max(fi,ti),hi=Math.min(fi,ti);
+    for(let i=hi;i<=lo;i++)s.add(f[0]+RD[i]+f[2]);
+  }
+}
+const ALL_COMBOS=(()=>{const d=makeDeck(),r=[];for(let i=0;i<d.length;i++)for(let j=i+1;j<d.length;j++)r.push([d[i],d[j]]);return r})();
+function rangeCombos(rangeSet,exclude){
+  const used=new Set((exclude||[]).map(c=>c.id));
+  return ALL_COMBOS.filter(c=>!used.has(c[0].id)&&!used.has(c[1].id)&&rangeSet.has(comboKey(c)));
+}
+function equityVsRange(hero,rangeSet,board,iters){
+  iters=iters||500;
+  const vCombos=rangeCombos(rangeSet,[...hero,...board]);
+  if(!vCombos.length)return 0.5;
+  const fullDeck=makeDeck();
+  const heroIds=new Set(hero.map(c=>c.id));
+  const boardIds=new Set(board.map(c=>c.id));
+  let w=0,t=0;
+  for(let k=0;k<iters;k++){
+    const v=vCombos[Math.floor(Math.random()*vCombos.length)];
+    const vIds=new Set([v[0].id,v[1].id]);
+    const rem=fullDeck.filter(c=>!heroIds.has(c.id)&&!boardIds.has(c.id)&&!vIds.has(c.id));
+    const sh=shuffle(rem);
+    const sb=board.concat(sh.slice(0,5-board.length));
+    const hs=evaluate7([...hero,...sb]);
+    const vs=evaluate7([...v,...sb]);
+    const c=cmpH(hs,vs);
+    if(c>0)w++;else if(c===0)t++;
+  }
+  return(w+t/2)/iters;
+}
+
+// ============================================================
+// STATE
+// ============================================================
+const G={
+  players:[],button:0,hand:0,level:0,deck:[],board:[],pot:0,
+  currentBet:0,lastRaise:0,street:'preflop',actIdx:0,
+  sbPos:0,bbPos:0,log:[],actionHistory:[],bubbles:{},handResult:null,waitingForNext:false
+};
+
+function newTournament(){
+  G.players=[];G.hand=0;G.level=0;G.log=[];G.bubbles={};G.handResult=null;G.waitingForNext=false;
+  G.players.push({id:0,name:'Hero',isHero:true,stack:START_STACK,cards:[],bet:0,folded:false,allin:false,acted:false});
+  const botNames=shuffle(BOT_NAMES).slice(0,NUM_PLAYERS-1);
+  for(let i=1;i<NUM_PLAYERS;i++)G.players.push({id:i,name:botNames[i-1],isHero:false,stack:START_STACK,cards:[],bet:0,folded:false,allin:false,acted:false});
+  G.button=Math.floor(Math.random()*NUM_PLAYERS);
+  renderAll();
+  setTimeout(startHand,300);
+}
+
+function startHand(){
+  const alive=G.players.filter(p=>p.stack>0);
+  if(alive.length<=1){endTournament();return}
+  G.hand++;
+  G.level=Math.min(Math.floor((G.hand-1)/HANDS_PER_LEVEL),BLINDS.length-1);
+  G.board=[];G.pot=0;G.currentBet=0;G.lastRaise=0;G.street='preflop';
+  G.actionHistory=[];G.bubbles={};G.handResult=null;G.waitingForNext=false;
+  G.deck=shuffle(makeDeck());
+  G.players.forEach(p=>{p.cards=[];p.bet=0;p.folded=p.stack<=0;p.allin=false;p.acted=false;p.won=false;p.showCards=false});
+  // 버튼 이동
+  if(G.hand>1){let nb=G.button;do{nb=(nb+1)%NUM_PLAYERS}while(G.players[nb].stack<=0);G.button=nb}
+  assignPositions();postBlindsAndAntes();dealHoleCards();
+  G.actIdx=firstToActPreflop();
+  logMsg(`✦ 핸드 #${G.hand} | 레벨 ${G.level+1} (${BLINDS[G.level].sb}/${BLINDS[G.level].bb}${BLINDS[G.level].ante?` ante ${BLINDS[G.level].ante}`:''})`,'hand');
+  hideNextBar();renderAll();
+  setTimeout(nextAction,500);
+}
+
+function assignPositions(){
+  const alive=[];
+  for(let i=0;i<NUM_PLAYERS;i++){const idx=(G.button+i)%NUM_PLAYERS;if(G.players[idx].stack>0)alive.push(idx)}
+  const pm={6:['BTN','SB','BB','UTG','HJ','CO'],5:['BTN','SB','BB','UTG','CO'],4:['BTN','SB','BB','CO'],3:['BTN','SB','BB'],2:['BTN','BB']}[alive.length]||['BTN'];
+  G.players.forEach(p=>p.position=null);
+  alive.forEach((idx,i)=>G.players[idx].position=pm[i]);
+  G.sbPos=alive.length===2?alive[0]:alive[1];
+  G.bbPos=alive.length===2?alive[1]:alive[2];
+}
+
+function postBlindsAndAntes(){
+  const bl=BLINDS[G.level];
+  G.players.forEach(p=>{if(p.stack>0&&bl.ante>0){const a=Math.min(bl.ante,p.stack);p.stack-=a;G.pot+=a;if(p.stack===0)p.allin=true}});
+  const sbP=G.players[G.sbPos],bbP=G.players[G.bbPos];
+  const sb=Math.min(bl.sb,sbP.stack);sbP.stack-=sb;sbP.bet=sb;G.pot+=sb;if(sbP.stack===0)sbP.allin=true;
+  const bb=Math.min(bl.bb,bbP.stack);bbP.stack-=bb;bbP.bet=bb;G.pot+=bb;if(bbP.stack===0)bbP.allin=true;
+  G.currentBet=bl.bb;G.lastRaise=bl.bb;
+}
+
+function dealHoleCards(){for(let r=0;r<2;r++)G.players.forEach(p=>{if(!p.folded&&p.stack>=0)p.cards.push(G.deck.pop())})}
+
+function firstToActPreflop(){
+  const alive=G.players.filter(p=>p.stack>0||p.bet>0).length;
+  if(alive===2)return G.button;
+  let i=(G.bbPos+1)%NUM_PLAYERS;
+  while(G.players[i].stack<=0||G.players[i].folded)i=(i+1)%NUM_PLAYERS;
+  return i;
+}
+function firstToActPostflop(){
+  let i=(G.button+1)%NUM_PLAYERS;
+  for(let k=0;k<NUM_PLAYERS;k++){
+    if(!G.players[i].folded&&!G.players[i].allin&&G.players[i].stack>0)return i;
+    i=(i+1)%NUM_PLAYERS;
+  }
+  return -1;
+}
+
+// ============================================================
+// FLOW
+// ============================================================
+function nextAction(){
+  if(G.waitingForNext)return;
+  const inHand=G.players.filter(p=>!p.folded);
+  if(inHand.length===1){awardPot(inHand[0]);return}
+  const needAction=G.players.filter(p=>!p.folded&&!p.allin&&(!p.acted||p.bet<G.currentBet));
+  if(needAction.length===0){advanceStreet();return}
+  let p=G.players[G.actIdx],loops=0;
+  while((p.folded||p.allin||(p.acted&&p.bet===G.currentBet))&&loops<NUM_PLAYERS*2){
+    G.actIdx=(G.actIdx+1)%NUM_PLAYERS;p=G.players[G.actIdx];loops++;
+  }
+  if(loops>=NUM_PLAYERS*2){advanceStreet();return}
+  renderAll();
+  if(p.isHero){showActionBar();setupHeroAction()}
+  else{hideActionBar();showWaitBar(p.name);setTimeout(()=>botAction(p),700+Math.random()*600)}
+}
+
+function doAction(player,action){
+  const callAmt=G.currentBet-player.bet;
+  let bubbleText='',bubbleType='';
+  if(action.type==='fold'){
+    player.folded=true;
+    G.actionHistory.push({p:player.id,type:'fold',street:G.street});
+    bubbleText='폴드';bubbleType='fold';
+    logMsg(`${player.name} 폴드`);
+  }else if(action.type==='check'){
+    G.actionHistory.push({p:player.id,type:'check',street:G.street});
+    bubbleText='체크';bubbleType='check';
+    logMsg(`${player.name} 체크`);
+  }else if(action.type==='call'){
+    const amt=Math.min(callAmt,player.stack);
+    player.stack-=amt;player.bet+=amt;G.pot+=amt;
+    if(player.stack===0)player.allin=true;
+    G.actionHistory.push({p:player.id,type:'call',amount:amt,street:G.street});
+    bubbleText=player.allin?`올인 콜 ${player.bet}`:`콜 ${amt}`;
+    bubbleType=player.allin?'allin':'call';
+    logMsg(`${player.name} ${bubbleText}`);
+  }else if(action.type==='raise'||action.type==='allin'){
+    const target=action.type==='allin'?player.bet+player.stack:action.amount;
+    const raiseAmt=target-player.bet;
+    const finalRaise=Math.min(raiseAmt,player.stack);
+    player.stack-=finalRaise;player.bet+=finalRaise;G.pot+=finalRaise;
+    const raiseIncrement=player.bet-G.currentBet;
+    if(raiseIncrement>0){
+      G.players.forEach(p=>{if(p.id!==player.id&&!p.folded&&!p.allin)p.acted=false});
+      G.currentBet=player.bet;
+      if(raiseIncrement>=G.lastRaise)G.lastRaise=raiseIncrement;
+    }
+    if(player.stack===0)player.allin=true;
+    G.actionHistory.push({p:player.id,type:action.type,amount:player.bet,street:G.street});
+    const isJam=action.type==='allin'||player.allin;
+    bubbleText=isJam?`올인 ${player.bet}`:`레이즈 ${player.bet}`;
+    bubbleType=isJam?'allin':'raise';
+    logMsg(`${player.name} ${bubbleText}`);
+  }
+  player.acted=true;
+  showBubble(player.id,bubbleText,bubbleType);
+  G.actIdx=(G.actIdx+1)%NUM_PLAYERS;
+  renderAll();
+  setTimeout(nextAction,850);
+}
+
+function advanceStreet(){
+  G.players.forEach(p=>{p.bet=0;p.acted=false});
+  G.currentBet=0;G.lastRaise=BLINDS[G.level].bb;
+  G.bubbles={};
+  const needMore=G.players.filter(p=>!p.folded&&!p.allin);
+  if(G.street==='preflop'){G.street='flop';G.deck.pop();G.board.push(G.deck.pop(),G.deck.pop(),G.deck.pop());logMsg(`━ 플랍 ${G.board.map(cardStr).join(' ')}`,'hand')}
+  else if(G.street==='flop'){G.street='turn';G.deck.pop();G.board.push(G.deck.pop());logMsg(`━ 턴 ${cardStr(G.board[3])}`,'hand')}
+  else if(G.street==='turn'){G.street='river';G.deck.pop();G.board.push(G.deck.pop());logMsg(`━ 리버 ${cardStr(G.board[4])}`,'hand')}
+  else if(G.street==='river'){showdown();return}
+  renderAll();
+  if(needMore.length<2){setTimeout(advanceStreet,900);return}
+  G.actIdx=firstToActPostflop();
+  setTimeout(nextAction,700);
+}
+
+function showdown(){
+  const contenders=G.players.filter(p=>!p.folded);
+  contenders.forEach(p=>{p.handEval=evaluate7([...p.cards,...G.board]);p.showCards=true});
+  let best=contenders[0];
+  contenders.forEach(p=>{if(cmpH(p.handEval,best.handEval)>0)best=p});
+  const winners=contenders.filter(p=>cmpH(p.handEval,best.handEval)===0);
+  const share=Math.floor(G.pot/winners.length);
+  winners.forEach(p=>{p.stack+=share;p.won=true;logMsg(`⭐ ${p.name} 승리 +${share.toLocaleString()} (${HAND_NAMES[p.handEval.c]})`,'win')});
+  G.handResult={type:'showdown',winners,potSize:G.pot,winAmt:share,handName:HAND_NAMES[best.handEval.c]};
+  G.pot=0;
+  renderAll();
+  waitForNextHand();
+}
+
+function awardPot(player){
+  player.stack+=G.pot;player.won=true;
+  logMsg(`${player.name} 상금 ${G.pot.toLocaleString()} (미콘테스트)`,'win');
+  G.handResult={type:'uncontested',winners:[player],winAmt:G.pot};
+  G.pot=0;renderAll();
+  waitForNextHand();
+}
+
+function waitForNextHand(){
+  G.waitingForNext=true;
+  hideActionBar();hideWaitBar();showNextBar();
+  updateCoachResult();
+  // Hero 털렸는지
+  const hero=G.players[0];
+  if(hero.stack<=0){
+    setTimeout(()=>endTournament(),1500);
+    return;
+  }
+}
+
+function onNextHandClick(){
+  if(!G.waitingForNext)return;
+  hideNextBar();
+  G.waitingForNext=false;
+  startHand();
+}
+
+function endTournament(){
+  const ranking=[...G.players].sort((a,b)=>b.stack-a.stack);
+  const rank=ranking.findIndex(p=>p.isHero)+1;
+  showModal('토너먼트 종료',`Hero 최종 순위: ${rank}/${NUM_PLAYERS}위\n총 ${G.hand}핸드 플레이\n\n새 토너먼트를 시작할까?`);
+  document.getElementById('modal-close').onclick=()=>{hideModal();newTournament()};
+}
+
+// ============================================================
+// BOT AI
+// ============================================================
+function getStackBand(bb){if(bb>=60)return'deep';if(bb>=25)return'mid';if(bb>=15)return'shallow';if(bb>=10)return'push';return'tiny'}
+function getOpenRangeFor(pos,bb){const band=getStackBand(bb);const tbl=OPEN_RANGES[band]||OPEN_RANGES.mid;if(pos==='HJ'||pos==='LJ')return tbl.MP;return tbl[pos]||tbl.CO}
+
+function botAction(bot){
+  hideWaitBar();
+  const bbSize=BLINDS[G.level].bb;
+  const bbStack=(bot.stack+bot.bet)/bbSize;
+  const callAmt=G.currentBet-bot.bet;
+  const handKey=comboKey(bot.cards);
+  const potOdds=callAmt>0?callAmt/(G.pot+callAmt):0;
+  let d;
+  if(G.street==='preflop')d=botPreflop(bot,bbStack,handKey,callAmt,potOdds);
+  else d=botPostflop(bot,bbStack,callAmt,potOdds);
+  doAction(bot,d);
+}
+
+function botPreflop(bot,bbStack,handKey,callAmt,potOdds){
+  const bb=BLINDS[G.level].bb;
+  const raised=G.actionHistory.some(a=>a.street==='preflop'&&(a.type==='raise'||a.type==='allin'));
+  const band=getStackBand(bbStack);
+
+  if(!raised){
+    const range=expandRange(getOpenRangeFor(bot.position,bbStack));
+    if(range.has(handKey)){
+      if(bbStack<=12)return{type:'allin'};
+      const openSize=bb*(bbStack<30?2.2:2.5);
+      if(bot.stack<=openSize*1.5)return{type:'allin'};
+      return{type:'raise',amount:Math.round(openSize)};
+    }
+    if(bot.position==='BB'&&callAmt===0)return{type:'check'};
+    return{type:'fold'};
+  }
+
+  const reraises=G.actionHistory.filter(a=>a.street==='preflop'&&(a.type==='raise'||a.type==='allin')).length;
+  let valueRange,callRange;
+  if(reraises>=2){
+    valueRange=expandRange('KK+, AKs');callRange=expandRange('QQ-JJ, AKo, AQs');
+  }else{
+    if(band==='deep'||band==='mid'){valueRange=expandRange('JJ+, AQs+, AKo');callRange=expandRange('22-TT, A9s-AJs, KJs+, QJs, JTs, T9s, AJo, KQo')}
+    else if(band==='shallow'){valueRange=expandRange('TT+, AQs+, AKo');callRange=expandRange('22-99, AJs, KQs, ATo-AJo')}
+    else{valueRange=expandRange('77+, AJs+, AQo+, KQs');callRange=expandRange('22-66, A8s-ATs, KJs, ATo')}
+  }
+
+  if(bot.position==='BB'&&reraises===1){
+    const defend=expandRange(DEFEND_RANGES.call_vs_open[band]||DEFEND_RANGES.call_vs_open.mid);
+    if(valueRange.has(handKey)){if(bot.stack<=G.currentBet*3)return{type:'allin'};return{type:'raise',amount:G.currentBet*3}}
+    if(defend.has(handKey)||callRange.has(handKey)){if(callAmt>=bot.stack)return{type:'allin'};return{type:'call'}}
+    return{type:'fold'};
+  }
+  if(bbStack<=12){
+    if(valueRange.has(handKey)||callRange.has(handKey)){if(callAmt>=bot.stack*0.8)return{type:'call'};return{type:'allin'}}
+    return{type:'fold'};
+  }
+  if(valueRange.has(handKey)){const t=G.currentBet*3;if(bot.stack<=t*1.5)return{type:'allin'};return{type:'raise',amount:t}}
+  if(callRange.has(handKey)){if(callAmt>=bot.stack)return{type:'allin'};return{type:'call'}}
+  return{type:'fold'};
+}
+
+function botPostflop(bot,bbStack,callAmt,potOdds){
+  const evalH=evaluate7([...bot.cards,...G.board]);
+  let strength=0;
+  if(evalH.c>=3)strength=0.9;
+  else if(evalH.c===2)strength=0.7;
+  else if(evalH.c===1){
+    const maxBoard=Math.max(...G.board.map(c=>c.rank));
+    const pr=evalH.t[0];
+    if(pr>maxBoard)strength=0.65;
+    else if(pr===maxBoard)strength=0.55;
+    else strength=0.3;
+  }else{const d=checkDraw(bot.cards,G.board);strength=0.1+d*0.3}
+
+  // 프리플랍 마지막 raiser = 포스트플랍 c-bet 권한자
+  const pfAggAct=[...G.actionHistory].reverse().find(a=>a.street==='preflop'&&(a.type==='raise'||a.type==='allin'));
+  const pfAggressorId=pfAggAct?pfAggAct.p:null;
+  const isPfAggressor=pfAggressorId===bot.id;
+  // 액션이 봇한테 왔는데 거기까지 포스트플랍 베팅이 한 번이라도 있었으면 누군가 이미 lead
+  const postBetActed=G.actionHistory.some(a=>a.street===G.street&&(a.type==='raise'||a.type==='allin'));
+
+  const facingBet=callAmt>0;
+  if(!facingBet){
+    // 누군가 이미 c-bet했어야 하는 자리(상대가 PFR)인데 봇이 첫 액션 → donk 영역
+    const isDonkSpot=!isPfAggressor && pfAggressorId!==null && !postBetActed;
+
+    if(isDonkSpot){
+      // 동크벳 거의 안 함. 너무 강한 핸드(셋+) 한정으로만 가끔 lead.
+      if(strength>=0.85 && Math.random()<0.15){
+        const sz=Math.min(bot.stack,Math.floor(G.pot*0.5));
+        if(sz>=bot.stack)return{type:'allin'};
+        return{type:'raise',amount:sz};
+      }
+      return{type:'check'};
+    }
+
+    // c-bet 권한 있거나(=PFR) 또는 모두 체크된 후의 후속 스트릿
+    if(isPfAggressor){
+      // 표준 c-bet: 강한 핸드는 value, 약한 핸드는 일정 빈도 bluff
+      if(strength>=0.55){
+        const sz=Math.min(bot.stack,Math.floor(G.pot*0.66));
+        if(sz>=bot.stack)return{type:'allin'};
+        return{type:'raise',amount:sz};
+      }
+      if(strength<0.25 && Math.random()<0.55){
+        const sz=Math.min(bot.stack,Math.floor(G.pot*0.5));
+        if(sz>=bot.stack*0.8)return{type:'check'};
+        return{type:'raise',amount:sz};
+      }
+      // 미디엄 강도(0.25~0.55): 체크 빈도 높임 (range 보호)
+      if(strength<0.55 && Math.random()<0.7)return{type:'check'};
+      const sz=Math.min(bot.stack,Math.floor(G.pot*0.4));
+      if(sz>=bot.stack)return{type:'allin'};
+      return{type:'raise',amount:sz};
+    }
+
+    // 모두 체크된 후의 턴/리버 — 강한 핸드만 value bet, 그 외 체크
+    if(strength>=0.65){
+      const sz=Math.min(bot.stack,Math.floor(G.pot*0.55));
+      if(sz>=bot.stack)return{type:'allin'};
+      return{type:'raise',amount:sz};
+    }
+    return{type:'check'};
+  }
+  const needed=potOdds;
+  const eq=Math.min(0.95,Math.max(0.05,strength));
+  if(strength>=0.85){const t=G.currentBet*2.5;if(t>=bot.stack)return{type:'allin'};return{type:'raise',amount:Math.round(t)}}
+  if(eq>needed+0.05)return{type:'call'};
+  if(eq>needed-0.02&&Math.random()<0.3)return{type:'call'};
+  return{type:'fold'};
+}
+
+function checkDraw(hole,board){
+  if(board.length<3)return 0;
+  const all=[...hole,...board],sc=[0,0,0,0];
+  all.forEach(c=>sc[c.suit]++);
+  const fd=sc.some(n=>n===4);
+  const rs=[...new Set(all.map(c=>c.rank))].sort((a,b)=>a-b);
+  let sd=false;for(let i=0;i<rs.length-3;i++)if(rs[i+3]-rs[i]<=4)sd=true;
+  let eq=0;if(fd)eq+=0.35;if(sd)eq+=0.17;if(fd&&sd)eq=0.55;return eq;
+}
+
+// ============================================================
+// HERO ACTION
+// ============================================================
+function setupHeroAction(){
+  const hero=G.players[0];
+  const callAmt=G.currentBet-hero.bet;
+  const canCheck=callAmt===0;
+  const minRaise=G.currentBet+G.lastRaise;
+  const maxRaise=hero.stack+hero.bet;
+
+  document.querySelectorAll('.btn-action').forEach(b=>b.disabled=false);
+  const checkBtn=document.querySelector('[data-act="check"]');
+  const callBtn=document.querySelector('[data-act="call"]');
+  if(canCheck){callBtn.style.display='none';checkBtn.style.display=''}
+  else{checkBtn.style.display='none';callBtn.style.display='';callBtn.textContent=`콜 ${callAmt}`}
+
+  const slider=document.getElementById('raise-slider');
+  const disp=document.getElementById('raise-display');
+  const minR=Math.min(minRaise,maxRaise);
+  slider.min=minR;slider.max=maxRaise;
+  slider.value=Math.min(Math.max(Math.round(G.currentBet*2.5),minR),maxRaise);
+  disp.textContent=(+slider.value).toLocaleString();
+  slider.oninput=()=>{disp.textContent=(+slider.value).toLocaleString()};
+
+  document.querySelectorAll('.chip-preset').forEach(b=>{
+    b.onclick=()=>{
+      const sz=parseFloat(b.dataset.sz);
+      const target=Math.round(G.pot*sz+G.currentBet);
+      const v=Math.min(Math.max(target,minR),maxRaise);
+      slider.value=v;disp.textContent=(+v).toLocaleString();
+    };
+  });
+
+  const raiseBtn=document.querySelector('[data-act="raise"]');
+  if(maxRaise<=G.currentBet)raiseBtn.disabled=true;
+  updateCoach();
+
+  document.querySelectorAll('.btn-action').forEach(b=>{
+    b.onclick=()=>{
+      const act=b.dataset.act;
+      document.querySelectorAll('.btn-action').forEach(x=>x.disabled=true);
+      if(act==='fold')doAction(hero,{type:'fold'});
+      else if(act==='check')doAction(hero,{type:'check'});
+      else if(act==='call')doAction(hero,{type:'call'});
+      else if(act==='raise')doAction(hero,{type:'raise',amount:parseInt(slider.value)});
+      else if(act==='allin')doAction(hero,{type:'allin'});
+    };
+  });
+}
+
+// ============================================================
+// COACH PANEL
+// ============================================================
+function updateCoachResult(){
+  if(!G.handResult){document.getElementById('c-banner').innerHTML='';return}
+  const r=G.handResult;
+  const hero=G.players[0];
+  const heroWon=r.winners.some(w=>w.isHero);
+  let html='';
+  if(r.type==='showdown'){
+    const winnerNames=r.winners.map(w=>w.name).join(', ');
+    html=`<div class="result-banner ${heroWon?'':'lose'}"><div class="font-bold text-base">${heroWon?'✦ 승리':'✗ 패배'}</div>
+      <div class="text-xs mt-1">승자: <b>${winnerNames}</b> · ${r.handName} · +${r.winAmt.toLocaleString()}</div></div>`;
+  }else{
+    html=`<div class="result-banner ${heroWon?'':'lose'}"><div class="font-bold">${heroWon?'✦ 팟 획득 (미콘테스트)':'✗ 폴드'}</div>
+      <div class="text-xs mt-1">${r.winners[0].name} +${r.winAmt.toLocaleString()}</div></div>`;
+  }
+  document.getElementById('c-banner').innerHTML=html;
+}
+
+function updateCoach(){
+  document.getElementById('c-banner').innerHTML='';
+  const hero=G.players[0];
+  const bl=BLINDS[G.level];
+  const bbSize=bl.bb;
+  const heroBB=Math.round((hero.stack+hero.bet)/bbSize*10)/10;
+  const callAmt=G.currentBet-hero.bet;
+  const potOdds=callAmt>0?callAmt/(G.pot+callAmt):0;
+
+  const lastAgg=[...G.actionHistory].reverse().find(a=>a.street===G.street&&(a.type==='raise'||a.type==='allin'));
+  let sp=`<div class="flex justify-between"><span>포지션</span><b class="text-amber-400">${hero.position||'?'}</b></div>`;
+  sp+=`<div class="flex justify-between"><span>스택</span><b>${hero.stack.toLocaleString()} <span class="text-slate-400">(${heroBB}bb)</span></b></div>`;
+  sp+=`<div class="flex justify-between"><span>핸드</span><b>${hero.cards.map(cardStr).join(' ')} <span class="text-slate-400">(${comboKey(hero.cards)})</span></b></div>`;
+  sp+=`<div class="flex justify-between"><span>스트릿</span><b class="capitalize">${G.street}</b></div>`;
+  if(G.board.length)sp+=`<div class="flex justify-between"><span>보드</span><b>${G.board.map(cardStr).join(' ')}</b></div>`;
+  sp+=`<div class="flex justify-between"><span>팟 / 콜</span><b>${G.pot.toLocaleString()} / ${callAmt.toLocaleString()}</b></div>`;
+  document.getElementById('c-spot').innerHTML=sp;
+
+  // 상대 레인지
+  let vRangeStr='',vRangeSet=null,vPos='?';
+  if(lastAgg){
+    const v=G.players[lastAgg.p];vPos=v.position;
+    const vbb=(v.stack+v.bet)/bbSize;
+    vRangeStr=getOpenRangeFor(v.position,vbb);
+    vRangeSet=expandRange(vRangeStr);
+  }else if(G.street==='preflop'&&hero.position==='BB'){
+    const sb=G.players[G.sbPos];
+    if(sb&&!sb.folded){vRangeStr=getOpenRangeFor('SB',(sb.stack+sb.bet)/bbSize);vRangeSet=expandRange(vRangeStr);vPos='SB'}
+  }else{
+    vRangeStr=getOpenRangeFor(hero.position,heroBB);
+    vRangeSet=expandRange(vRangeStr);vPos=hero.position+' (자기)';
+  }
+
+  let heroEq=null;
+  if(vRangeSet&&vRangeSet.size){try{heroEq=equityVsRange(hero.cards,vRangeSet,G.board,400)}catch(e){}}
+
+  let mh='';
+  if(callAmt>0){
+    const reqEq=Math.round(potOdds*1000)/10;
+    mh+=`<div class="metric"><span>팟 오즈</span><span class="metric-val">${Math.round((G.pot+callAmt)/callAmt*10)/10} : 1</span></div>`;
+    mh+=`<div class="metric"><span>필요 이쿼티</span><span class="metric-val warn">${reqEq}%</span></div>`;
+  }
+  if(heroEq!==null){
+    const ep=Math.round(heroEq*1000)/10;
+    const cls=callAmt>0?(heroEq>potOdds+0.05?'good':(heroEq>potOdds-0.02?'warn':'bad')):'';
+    mh+=`<div class="metric"><span>Hero 이쿼티 <span class="text-slate-500">(vs ${vPos})</span></span><span class="metric-val ${cls}">${ep}%</span></div>`;
+  }
+  if(G.street!=='preflop'&&G.board.length){
+    const outs=countOuts(hero.cards,G.board);
+    if(outs>0){
+      const sl=5-G.board.length,rule=sl===1?2:4,ae=Math.min(outs*rule,95);
+      mh+=`<div class="metric"><span>아웃</span><span class="metric-val">${outs}장 <span class="text-slate-500">(×${rule} ≈ ${ae}%)</span></span></div>`;
+    }
+  }
+  document.getElementById('c-math').innerHTML=mh||'<span class="text-slate-500 text-sm">계산할 수치 없음</span>';
+
+  const rec=recommendAction(hero,heroEq,potOdds,callAmt,heroBB,vRangeSet,lastAgg);
+  document.getElementById('c-rec').innerHTML=`<div class="rec ${rec.cls}"><div class="rec-action">${rec.action}</div><div class="rec-reason">${rec.reason}</div></div>`;
+
+  if(vRangeSet){document.getElementById('c-range-text').textContent=vRangeStr;renderRangeGrid(vRangeSet,hero.cards)}
+  else{document.getElementById('c-range-text').textContent='레인지 없음';renderRangeGrid(new Set(),hero.cards)}
+
+  const hm=heroMatrix(heroBB,hero.position,lastAgg,callAmt);
+  renderHeroMatrix(hm,hero.cards);
+
+  document.getElementById('c-icm').innerHTML=computeICMText(hero,heroBB);
+}
+
+function recommendAction(hero,eq,potOdds,callAmt,heroBB,vRange,aggressor){
+  const canCheck=callAmt===0;
+  const band=getStackBand(heroBB);
+  const handKey=comboKey(hero.cards);
+
+  if(G.street==='preflop'){
+    if(!aggressor){
+      const ownRange=expandRange(getOpenRangeFor(hero.position,heroBB));
+      if(ownRange.has(handKey)){
+        if(heroBB<=12)return{action:'올인 (shove)',cls:'shove',reason:`${heroBB}bb 뎁스의 ${hero.position} shove range에 ${handKey} 포함. push/fold 영역.`};
+        return{action:`오픈 레이즈 ${(heroBB<30?2.2:2.5)}bb`,cls:'go',reason:`${hero.position} standard open range에 ${handKey} 포함.`};
+      }
+      if(canCheck)return{action:'체크',cls:'fold',reason:`BB 무료 옵션. ${handKey}은 오픈 레인지 밖이지만 무료.`};
+      return{action:'폴드',cls:'fold',reason:`${hero.position} ${heroBB}bb 오픈 레인지에 ${handKey} 미포함. 폴드가 default.`};
+    }
+    const reraiseCount=G.actionHistory.filter(a=>a.street==='preflop'&&(a.type==='raise'||a.type==='allin')).length;
+    if(reraiseCount>=2){
+      const cr=expandRange('QQ+, AKs, AKo');
+      if(cr.has(handKey)){
+        if(handKey==='KK'||handKey==='AA')return{action:'5-bet 올인',cls:'shove',reason:`${handKey}은 4-bet 페이스 top. 5-bet jam으로 value 극대화.`};
+        return{action:'콜 / 5-bet 믹스',cls:'mix',reason:`${handKey}은 4-bet 페이스에서 call/5-bet 혼합. 스택·상대 레인지 따라.`};
+      }
+      return{action:'폴드',cls:'fold',reason:`4-bet 페이스 레인지(QQ+/AK) 밖. ${handKey} 폴드.`};
+    }
+    const vr=band==='deep'||band==='mid'?expandRange('JJ+, AQs+, AKo'):expandRange('TT+, AQs+, AKo');
+    const cr=expandRange(DEFEND_RANGES.call_vs_open[band]||DEFEND_RANGES.call_vs_open.mid);
+    if(vr.has(handKey)){
+      if(heroBB<=15)return{action:'올인',cls:'shove',reason:`${heroBB}bb + 프리미엄. non-allin 3-bet은 commit 문제.`};
+      return{action:`3-bet to ~${Math.round(G.currentBet*3)}`,cls:'go',reason:`${handKey}은 value 3-bet 범위. FE + equity 둘 다 좋음.`};
+    }
+    if(cr.has(handKey)&&hero.position==='BB')return{action:'콜 (디펜드)',cls:'mix',reason:`BB MDF. ${Math.round(potOdds*100)}% eq 필요, ${handKey}은 대부분 초과.`};
+    if(cr.has(handKey)&&hero.position==='BTN')return{action:'콜 (IP flat)',cls:'mix',reason:`BTN IP flat. ${handKey}은 3-bet하기엔 thin, fold하기엔 아까운 mid range.`};
+    if(eq!==null&&eq>potOdds+0.07)return{action:'콜',cls:'mix',reason:`이쿼티 ${Math.round(eq*100)}% > 필요 ${Math.round(potOdds*100)}% + realization buffer.`};
+    return{action:'폴드',cls:'fold',reason:`${handKey}은 콜/3-bet 레인지 밖. ICM 고려하면 더 확실한 폴드.`};
+  }
+
+  const evalH=evaluate7([...hero.cards,...G.board]);
+  const cat=evalH.c,sn=HAND_NAMES[cat];
+
+  if(!callAmt){
+    if(cat>=3)return{action:`밸류 벳 ~${Math.round(G.pot*0.66)}`,cls:'go',reason:`${sn}. 2/3 pot value bet으로 thin range까지 커버.`};
+    if(cat===2)return{action:`밸류 벳 ~${Math.round(G.pot*0.5)}`,cls:'go',reason:`${sn}. 1/2 pot, 드로 vs 방어.`};
+    if(cat===1){
+      const mb=Math.max(...G.board.map(c=>c.rank));
+      if(evalH.t[0]>=mb)return{action:`벳 ~${Math.round(G.pot*0.5)}`,cls:'go',reason:`탑페어/오버페어. protection + thin value.`};
+      return{action:'체크',cls:'mix',reason:`미들페어는 pot control. 체크 후 캐치.`};
+    }
+    const de=checkDraw(hero.cards,G.board);
+    if(de>0.3)return{action:`세미블러프 ~${Math.round(G.pot*0.66)}`,cls:'mix',reason:`강한 드로. FE + equity 둘 다 있어 aggressive line 정당화.`};
+    return{action:'체크',cls:'fold',reason:`made hand/draw 약함. check으로 range cap 피하며 블러프캐치 유지.`};
+  }
+
+  const rp=Math.round(potOdds*100),ep=eq!==null?Math.round(eq*100):null;
+  if(cat>=3){if(cat>=6)return{action:'레이즈 올인',cls:'shove',reason:`${sn} - nutted. 레이즈/올인으로 value.`};return{action:`레이즈 ~${Math.round(G.currentBet*2.5)}`,cls:'go',reason:`${sn}. value raise로 스택 get in.`}}
+  if(cat===2)return{action:'콜 (또는 raise)',cls:'go',reason:`${sn}. 웻 보드면 레이즈, 드라이면 콜.`};
+  if(cat===1){
+    if(eq!==null&&eq>potOdds+0.05)return{action:'콜',cls:'go',reason:`탑페어급, eq ${ep}% > 필요 ${rp}%. 블러프캐치.`};
+    if(eq!==null&&eq>potOdds-0.03)return{action:'콜 (margin)',cls:'mix',reason:`margin call. polarized villain 블러프 캐치.`};
+    return{action:'폴드',cls:'fold',reason:`${sn}이지만 eq ${ep||'?'}% < 필요 ${rp}%.`};
+  }
+  const outs=countOuts(hero.cards,G.board);
+  if(outs>=8){
+    const sl=5-G.board.length,rule=sl===1?2:4,ae=Math.min(outs*rule,95);
+    if(ae>rp+3)return{action:'콜 (draw)',cls:'mix',reason:`${outs} outs ≈ ${ae}% > 필요 ${rp}%. Implied odds 포함 OK.`};
+    return{action:'폴드 or 세미블러프',cls:'mix',reason:`${outs} outs 마진. Direct odds 부족, 세미블러프 shove가 +EV 가능.`};
+  }
+  return{action:'폴드',cls:'fold',reason:`made hand 약하고 drawing thin. ${rp}% 필요. 폴드.`};
+}
+
+function countOuts(hole,board){
+  if(board.length<3||board.length===5)return 0;
+  const deck=makeDeck();
+  const used=new Set([...hole,...board].map(c=>c.id));
+  const rem=deck.filter(c=>!used.has(c.id));
+  const ce=evaluate7([...hole,...board,...rem.slice(0,0)]);
+  let outs=0;
+  rem.forEach(c=>{
+    const nb=[...board,c];
+    if(nb.length<5)return;
+    const ne=evaluate7([...hole,...nb]);
+    if(cmpH(ne,ce)>0&&ne.c>=2)outs++;
+  });
+  return outs;
+}
+
+function computeICMText(hero,heroBB){
+  const alive=G.players.filter(p=>p.stack>0).length;
+  const total=G.players.reduce((s,p)=>s+p.stack,0);
+  const hs=hero.stack/total;
+  const avg=Math.round(total/alive);
+  let phase='early';
+  if(alive<=3)phase='final';
+  else if(alive<=NUM_PLAYERS-1)phase='bubble';
+  let rp=0.01;if(phase==='final')rp=0.10;else if(phase==='bubble')rp=0.05;
+  const st=hero.stack>=avg*1.3?'빅':hero.stack<=avg*0.6?'숏':'미디엄';
+  let advice='';
+  if(phase==='early')advice='페이아웃 멀음. Chip EV ≈ $EV. ICM 무시 가능.';
+  else if(phase==='bubble'){
+    if(st==='빅')advice='빅스택 - 미디엄에게 polarized shove. FE 극대화.';
+    else if(st==='미디엄')advice='미디엄 - 가장 타이트. 숏·빅 모두 피하기.';
+    else advice='숏 - 리스틸 OK. 0 eq 핸드 abandon은 하지 말 것.';
+  }else advice='파이널 - risk premium 높음. 콜 레인지 −20~40% 타이트.';
+  return`<div class="flex justify-between"><span>생존</span><b>${alive}/${NUM_PLAYERS} <span class="text-slate-400">(${phase==='early'?'초반':phase==='bubble'?'버블 근처':'파이널'})</span></b></div>
+    <div class="flex justify-between"><span>Hero 점유</span><b>${Math.round(hs*100)}% <span class="text-slate-400">(${st})</span></b></div>
+    <div class="flex justify-between"><span>Risk premium</span><b class="text-amber-400">+${Math.round(rp*100)}%</b></div>
+    <div class="text-slate-400 text-[11px] leading-relaxed pt-1">${advice}</div>`;
+}
+
+// ============================================================
+// RENDERING - TABLE
+// ============================================================
+const SEAT_POS=[
+  {x:50,y:92}, // 0: Hero bottom
+  {x:12,y:70}, // 1: bottom-left
+  {x:12,y:28}, // 2: top-left
+  {x:50,y:6},  // 3: top
+  {x:88,y:28}, // 4: top-right
+  {x:88,y:70}, // 5: bottom-right
+];
+const CHIP_POS=[
+  {x:50,y:72},{x:26,y:62},{x:26,y:38},{x:50,y:22},{x:74,y:38},{x:74,y:62}
+];
+
+function renderAll(){renderTourney();renderSeats();renderBoard();renderPot();renderChips();renderLog()}
+
+function renderTourney(){
+  document.getElementById('t-level').textContent=G.level+1;
+  const bl=BLINDS[G.level];
+  document.getElementById('t-blinds').textContent=`${bl.sb}/${bl.bb}`;
+  const aw=document.getElementById('t-ante-wrap');
+  if(bl.ante>0){aw.classList.remove('hidden');document.getElementById('t-ante').textContent=bl.ante}else aw.classList.add('hidden');
+  document.getElementById('t-hand').textContent=G.hand;
+  const alive=G.players.filter(p=>p.stack>0).length;
+  document.getElementById('t-alive').textContent=alive;
+  const total=G.players.reduce((s,p)=>s+p.stack,0);
+  document.getElementById('t-avg').textContent=(Math.round(total/Math.max(alive,1))).toLocaleString();
+  const rk=[...G.players].sort((a,b)=>b.stack-a.stack).findIndex(p=>p.isHero)+1;
+  document.getElementById('t-rank').textContent=rk;
+}
+
+function renderSeats(){
+  const layer=document.getElementById('seats-layer');
+  layer.innerHTML='';
+  for(let i=0;i<NUM_PLAYERS;i++){
+    const p=G.players[i];
+    const pos=SEAT_POS[i];
+    const isAct=G.actIdx===i&&!p.folded&&p.stack>0&&!G.waitingForNext;
+    const cls='seat'+(p.isHero?' hero':'')+(isAct?' active':'')+(p.folded?' folded':'')+(p.won?' winner':'');
+    const showCards=p.isHero||p.showCards;
+    let cards='';
+    if(p.cards.length){
+      cards=showCards?p.cards.map(c=>cardHTML(c,!p.isHero)).join(''):cardBack(true)+cardBack(true);
+    }
+    const isBtn=i===G.button&&p.stack>0;
+    const pos_tag=p.position||'';
+    const status=p.folded?'<span class="text-red-400 text-xs font-bold">폴드</span>':
+                 p.allin?'<span class="text-purple-300 text-xs font-bold">ALL-IN</span>':'';
+    const bubble=G.bubbles[i]?`<div class="bubble ${G.bubbles[i].type}">${G.bubbles[i].text}</div>`:'';
+
+    const div=document.createElement('div');
+    div.className=cls;
+    div.style.left=pos.x+'%';div.style.top=pos.y+'%';
+    div.innerHTML=`
+      ${bubble}
+      <div class="seat-header">
+        <span class="seat-name">${p.name}</span>
+        ${isBtn?'<span class="dealer-btn">D</span>':(pos_tag?`<span class="pos-tag">${pos_tag}</span>`:'')}
+      </div>
+      <div class="seat-cards">${cards}</div>
+      <div class="seat-info">
+        <span class="stack">${p.stack.toLocaleString()}</span>
+        ${status||`<span class="text-[10px] text-slate-500">${p.isHero?'YOU':''}</span>`}
+      </div>
+    `;
+    layer.appendChild(div);
+  }
+}
+
+function renderChips(){
+  const layer=document.getElementById('chips-layer');
+  layer.innerHTML='';
+  for(let i=0;i<NUM_PLAYERS;i++){
+    const p=G.players[i];
+    if(p.bet<=0)continue;
+    const pos=CHIP_POS[i];
+    const div=document.createElement('div');
+    div.className='chip-bet';
+    div.style.left=pos.x+'%';div.style.top=pos.y+'%';
+    div.innerHTML=`<div class="chip-dot"></div><span>${p.bet.toLocaleString()}</span>`;
+    layer.appendChild(div);
+  }
+}
+
+function renderBoard(){
+  const b=document.getElementById('board');
+  b.innerHTML=G.board.map(c=>cardHTML(c,false,true)).join('');
+}
+function renderPot(){
+  const el=document.getElementById('pot');
+  el.innerHTML=`팟 <span class="num">${G.pot.toLocaleString()}</span>`;
+}
+function logMsg(m,cls){
+  G.log.push({m,cls:cls||''});
+  if(G.log.length>50)G.log.shift();
+  renderLog();
+}
+function renderLog(){
+  const el=document.getElementById('c-log');
+  el.innerHTML=G.log.slice(-25).map(l=>`<div class="log-entry ${l.cls}">${l.m}</div>`).join('');
+  el.scrollTop=el.scrollHeight;
+}
+function renderRangeGrid(set,heroCards){
+  const grid=document.getElementById('c-range-grid');
+  grid.innerHTML='';
+  const hk=heroCards.length?comboKey(heroCards):null;
+  for(let i=0;i<13;i++){
+    for(let j=0;j<13;j++){
+      const r1=RD[i],r2=RD[j];
+      let key;
+      if(i===j)key=r1+r2;
+      else if(i<j)key=r1+r2+'s';
+      else key=r2+r1+'o';
+      const c=document.createElement('div');
+      c.className='range-cell'+(set.has(key)?' in':'')+(hk===key?' hero':'');
+      c.textContent=key;
+      grid.appendChild(c);
+    }
+  }
+}
+
+// 169개 콤보 중 hero 포지션/스택/스팟에서 각 핸드의 권장 액션 산출
+function heroMatrix(heroBB,heroPos,aggressor,callAmt){
+  const band=getStackBand(heroBB);
+  const matrix={};
+
+  // 프리플랍 only (포스트플랍은 보드 의존성 커서 매트릭스 의미 약함)
+  if(G.street!=='preflop'){
+    return{matrix:null,label:'포스트플랍은 보드 의존 — 매트릭스 생략'};
+  }
+
+  const RD2='AKQJT98765432';
+  for(let i=0;i<13;i++){
+    for(let j=0;j<13;j++){
+      const r1=RD2[i],r2=RD2[j];
+      let key;
+      if(i===j)key=r1+r2;
+      else if(i<j)key=r1+r2+'s';
+      else key=r2+r1+'o';
+      matrix[key]='fold';
+    }
+  }
+
+  if(!aggressor){
+    // 자기 RFI 차례 (오픈 결정)
+    const open=expandRange(getOpenRangeFor(heroPos,heroBB));
+    open.forEach(k=>{
+      if(heroBB<=12)matrix[k]='allin';
+      else matrix[k]='raise';
+    });
+    // 12bb 이하: shove range로 해석 → 모두 allin
+    return{matrix,label:`${heroPos} ${Math.round(heroBB)}bb RFI`};
+  }
+
+  // 누군가 raise/allin함 — defend 결정
+  const reraises=G.actionHistory.filter(a=>a.street==='preflop'&&(a.type==='raise'||a.type==='allin')).length;
+
+  if(reraises>=2){
+    // 4-bet faced
+    expandRange('KK+').forEach(k=>matrix[k]='allin');
+    expandRange('QQ, AKs, AKo').forEach(k=>matrix[k]='mix');
+    return{matrix,label:`vs 4-bet (${reraises}-bet 페이스)`};
+  }
+
+  // single raise faced
+  if(heroBB<=12){
+    // push/fold 모드
+    const jamSrc=heroBB<=9?'tiny':'push';
+    const jam=expandRange(DEFEND_RANGES.jam_vs_open[jamSrc]||DEFEND_RANGES.jam_vs_open.push);
+    jam.forEach(k=>matrix[k]='allin');
+    return{matrix,label:`${heroPos} ${Math.round(heroBB)}bb vs raise — push/fold`};
+  }
+
+  const tb=expandRange(DEFEND_RANGES.threebet_vs_open[band]||DEFEND_RANGES.threebet_vs_open.mid);
+  tb.forEach(k=>{
+    if(heroBB<=18)matrix[k]='allin';
+    else matrix[k]='raise';
+  });
+
+  if(heroPos==='BB'||heroPos==='BTN'||heroPos==='SB'){
+    const cl=expandRange(DEFEND_RANGES.call_vs_open[band]||DEFEND_RANGES.call_vs_open.mid);
+    cl.forEach(k=>{if(matrix[k]==='fold')matrix[k]='call'});
+  }
+
+  return{matrix,label:`${heroPos} ${Math.round(heroBB)}bb vs ${aggressor.p!=null?G.players[aggressor.p].position:'?'} raise`};
+}
+
+function renderHeroMatrix(result,heroCards){
+  const grid=document.getElementById('c-matrix-grid');
+  const txt=document.getElementById('c-matrix-text');
+  grid.innerHTML='';
+  if(!result.matrix){txt.textContent=result.label;return}
+  txt.textContent=result.label;
+  const hk=heroCards.length?comboKey(heroCards):null;
+  const RD2='AKQJT98765432';
+  for(let i=0;i<13;i++){
+    for(let j=0;j<13;j++){
+      const r1=RD2[i],r2=RD2[j];
+      let key;
+      if(i===j)key=r1+r2;
+      else if(i<j)key=r1+r2+'s';
+      else key=r2+r1+'o';
+      const a=result.matrix[key]||'fold';
+      const c=document.createElement('div');
+      c.className='range-cell a-'+a+(hk===key?' hero-me':'');
+      c.textContent=key;
+      grid.appendChild(c);
+    }
+  }
+}
+
+function showBubble(pid,text,type){
+  G.bubbles[pid]={text,type};
+  renderSeats();
+  setTimeout(()=>{if(G.bubbles[pid]&&G.bubbles[pid].text===text){delete G.bubbles[pid];renderSeats()}},2600);
+}
+
+function showActionBar(){document.getElementById('action-bar').classList.remove('hidden')}
+function hideActionBar(){document.getElementById('action-bar').classList.add('hidden')}
+function showNextBar(){document.getElementById('next-bar').classList.remove('hidden')}
+function hideNextBar(){document.getElementById('next-bar').classList.add('hidden')}
+function showWaitBar(name){const el=document.getElementById('wait-bar');document.getElementById('wait-text').textContent=`${name} 생각 중...`;el.classList.remove('hidden')}
+function hideWaitBar(){document.getElementById('wait-bar').classList.add('hidden')}
+
+function showModal(t,b){document.getElementById('modal-title').textContent=t;document.getElementById('modal-body').textContent=b;document.getElementById('modal').classList.remove('hidden')}
+function hideModal(){document.getElementById('modal').classList.add('hidden')}
+
+document.getElementById('modal-close').onclick=hideModal;
+document.getElementById('btn-restart').onclick=()=>{if(confirm('토너먼트를 처음부터 다시 시작할까?'))newTournament()};
+document.getElementById('btn-next-hand').onclick=onNextHandClick;
+document.addEventListener('keydown',e=>{if(e.key===' '&&G.waitingForNext){e.preventDefault();onNextHandClick()}});
+
+newTournament();
+</script>
+</body>
+</html>
