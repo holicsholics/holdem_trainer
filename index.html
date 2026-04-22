@@ -509,20 +509,20 @@ const HANDS_PER_LEVEL=4,START_STACK=15000,NUM_PLAYERS=6;
 // ============================================================
 const BOT_PROFILES=[
   {name:'김산하',tag:'LAG',desc:'리그 최고 레귤러 · 3bet/블러프/벨류 모두 탑티어',
-   openMul:1.15,threebetMul:1.6,threebetBluff:0.38,fourbetBluff:0.18,defendWiden:1.35,
-   cbetFreq:1.15,doubleBarrel:0.72,bluff:1.45,checkRaise:0.22,floatFreq:0.42,bluffCatch:1.1,postPrecision:0.95},
+   openMul:1.15,threebetMul:1.6,threebetBluff:0.36,fourbetBluff:0.18,defendWiden:1.3,
+   cbetFreq:1.15,doubleBarrel:0.7,bluff:1.4,checkRaise:0.22,floatFreq:0.38,bluffCatch:1.0,postPrecision:0.97},
   {name:'손승현',tag:'REG',desc:'포스트플랍 귀신 · 수딧 즐기고 블러프 캐치 장인',
-   openMul:1.05,threebetMul:0.75,threebetBluff:0.14,fourbetBluff:0.06,defendWiden:1.3,
-   cbetFreq:0.85,doubleBarrel:0.55,bluff:0.9,checkRaise:0.28,floatFreq:0.48,bluffCatch:1.4,postPrecision:0.92},
+   openMul:1.05,threebetMul:0.8,threebetBluff:0.14,fourbetBluff:0.07,defendWiden:1.25,
+   cbetFreq:0.9,doubleBarrel:0.58,bluff:0.95,checkRaise:0.28,floatFreq:0.42,bluffCatch:1.25,postPrecision:0.95},
   {name:'고재현',tag:'NIT',desc:'테이블 최타이트 · 3bet/4bet은 거의 진짜카드',
-   openMul:0.78,threebetMul:0.55,threebetBluff:0.05,fourbetBluff:0.02,defendWiden:0.9,
-   cbetFreq:0.75,doubleBarrel:0.45,bluff:0.35,checkRaise:0.06,floatFreq:0.12,bluffCatch:0.8,postPrecision:0.88},
+   openMul:0.78,threebetMul:0.55,threebetBluff:0.05,fourbetBluff:0.02,defendWiden:0.88,
+   cbetFreq:0.8,doubleBarrel:0.48,bluff:0.4,checkRaise:0.08,floatFreq:0.12,bluffCatch:0.75,postPrecision:0.93},
   {name:'조남규',tag:'FISH',desc:'미숙 · 레인지 넓고 3bet은 보통 진짜카드',
-   openMul:1.25,threebetMul:0.85,threebetBluff:0.08,fourbetBluff:0.03,defendWiden:1.45,
-   cbetFreq:0.7,doubleBarrel:0.35,bluff:0.55,checkRaise:0.08,floatFreq:0.28,bluffCatch:1.25,postPrecision:0.55},
+   openMul:1.2,threebetMul:0.85,threebetBluff:0.08,fourbetBluff:0.03,defendWiden:1.25,
+   cbetFreq:0.75,doubleBarrel:0.4,bluff:0.6,checkRaise:0.1,floatFreq:0.22,bluffCatch:1.05,postPrecision:0.72},
   {name:'최동진',tag:'TAG',desc:'프리플랍 타이트 · 경험 기반 레인지 · 에그레시브',
-   openMul:0.9,threebetMul:0.9,threebetBluff:0.18,fourbetBluff:0.08,defendWiden:1.0,
-   cbetFreq:1.0,doubleBarrel:0.6,bluff:0.95,checkRaise:0.16,floatFreq:0.24,bluffCatch:0.95,postPrecision:0.85}
+   openMul:0.9,threebetMul:0.95,threebetBluff:0.2,fourbetBluff:0.09,defendWiden:1.0,
+   cbetFreq:1.05,doubleBarrel:0.62,bluff:1.0,checkRaise:0.18,floatFreq:0.22,bluffCatch:0.9,postPrecision:0.9}
 ];
 
 // GTO Wizard 6-max MTT RFI 근사 (공개 GTO 표준 레인지 기반, mixed freq는 pure로 단순화)
@@ -1144,25 +1144,42 @@ function botPreflop(bot,bbStack,handKey,callAmt,potOdds){
 }
 
 function botPostflop(bot,bbStack,callAmt,potOdds){
-  const prof=bot.profile||{cbetFreq:1,doubleBarrel:0.5,bluff:1,checkRaise:0.1,floatFreq:0.2,bluffCatch:1,postPrecision:0.8};
+  const prof=bot.profile||{cbetFreq:1,doubleBarrel:0.5,bluff:1,checkRaise:0.1,floatFreq:0.2,bluffCatch:1,postPrecision:0.85};
   const evalH=evaluate7([...bot.cards,...G.board]);
-  let strength=0;
-  if(evalH.c>=3)strength=0.9;
-  else if(evalH.c===2)strength=0.7;
-  else if(evalH.c===1){
+  const tex=boardTexture(G.board);
+  const nActive=activePlayers();
+  const multiway=nActive>=3;
+  // 메이드 핸드 강도 (드로우는 별도, 더블카운트 방지)
+  let strength=0.08;
+  if(evalH.c>=5)strength=0.99;            // 스트플/풀하/쿼즈
+  else if(evalH.c>=4)strength=0.95;       // 스트레이트/플러시
+  else if(evalH.c===3)strength=0.9;       // 셋/트립스
+  else if(evalH.c===2){                   // 2pair — 페어 보드면 풀하우스 위협으로 약간 감점
+    strength=tex.paired?0.65:0.75;
+  }else if(evalH.c===1){
     const maxBoard=Math.max(...G.board.map(c=>c.rank));
     const pr=evalH.t[0];
-    if(pr>maxBoard)strength=0.65;
-    else if(pr===maxBoard)strength=0.55;
-    else strength=0.3;
-  }else{const d=checkDraw(bot.cards,G.board);strength=0.1+d*0.3}
-
+    if(pr>maxBoard){                      // overpair
+      strength=tex.paired?0.58:0.68;
+    }else if(pr===maxBoard){              // top pair
+      const kicker=evalH.t[1]||0;
+      let base=kicker>=13?0.58:(kicker>=11?0.5:0.42);
+      if(tex.paired)base-=0.08;
+      if(tex.flush3&&!tex.flush4)base-=0.05;
+      strength=Math.max(0.25,base);
+    }else{                                // 2nd pair or weaker
+      strength=tex.paired?0.2:0.28;
+    }
+  }
   // 정교함 낮은 프로필은 평가에 노이즈
   if(prof.postPrecision<0.9){
-    const noise=(Math.random()-0.5)*0.25*(1-prof.postPrecision);
-    strength=Math.max(0.05,Math.min(0.95,strength+noise));
+    const noise=(Math.random()-0.5)*0.18*(1-prof.postPrecision);
+    strength=Math.max(0.03,Math.min(0.97,strength+noise));
   }
   const drawEq=checkDraw(bot.cards,G.board);
+  // 페어드/플러시 보드 = 리버스 임플라이드 패널티, 멀티웨이 = 추가 감점
+  const texPenalty=(tex.paired?0.07:0)+(tex.flush4?0.06:0)+(tex.trips?0.18:0);
+  const multiwayPenalty=multiway?0.06:0;
 
   // 프리플랍 마지막 raiser = 포스트플랍 c-bet 권한자
   const pfAggAct=[...G.actionHistory].reverse().find(a=>a.street==='preflop'&&(a.type==='raise'||a.type==='allin'));
@@ -1253,74 +1270,141 @@ function botPostflop(bot,bbStack,callAmt,potOdds){
   }
 
   // ================= 베팅 받은 상황 =================
-  // 강한 밸류: 레이즈
-  if(strength>=0.85){
-    const t=G.currentBet*2.8;
+  // 벳 사이징: callAmt 대비 pre-call pot (근사)
+  const betPct=callAmt/Math.max(1,G.pot-callAmt);  // 0.5=half, 1.0=pot, >1=overbet
+  const isBigBet=betPct>=0.85;
+  const isHugeBet=betPct>=1.2;
+
+  // 너츠급 밸류: 레이즈/올인
+  if(strength>=0.92){
+    const t=G.currentBet*(multiway?3.0:2.8);
+    if(t>=bot.stack)return{type:'allin'};
+    return{type:'raise',amount:Math.round(t)};
+  }
+  // 강한 밸류 (셋/2pair): 멀티웨이+페어드 보드면 주의해서 raise, 아니면 그냥 raise
+  if(strength>=0.82&&!(tex.paired&&multiway)){
+    const t=G.currentBet*2.6;
     if(t>=bot.stack)return{type:'allin'};
     return{type:'raise',amount:Math.round(t)};
   }
 
-  // 체크-레이즈 (OOP, non-PFR, 플랍에서 c-bet 받은 상황, 아직 내가 이 스트릿에서 레이즈 안 함)
-  const canCheckRaise=!isPfAggressor&&!mePostAgg&&G.street==='flop';
+  // 체크-레이즈 (OOP, non-PFR, 플랍에서 c-bet 받은 상황)
+  const canCheckRaise=!isPfAggressor&&!mePostAgg&&G.street==='flop'&&!multiway;
   if(canCheckRaise&&prof.checkRaise>0){
-    // 밸류 체크레이즈
     if(strength>=0.72&&Math.random()<prof.checkRaise*2.2){
       const t=G.currentBet*3;
       if(t>=bot.stack)return{type:'allin'};
       return{type:'raise',amount:Math.round(t)};
     }
-    // 블러프 체크레이즈 (드로우 + 브릭 미들카드)
-    if(drawEq>=0.3&&Math.random()<prof.checkRaise*1.3*prof.bluff){
+    if(drawEq>=0.3&&!isBigBet&&Math.random()<prof.checkRaise*1.2*prof.bluff){
       const t=G.currentBet*3;
       if(t>=bot.stack)return{type:'allin'};
       return{type:'raise',amount:Math.round(t)};
     }
-    // 퓨어 블러프 체크레이즈 (가끔)
-    if(strength<0.2&&Math.random()<prof.checkRaise*0.6*prof.bluff){
+    if(strength<0.2&&!isBigBet&&Math.random()<prof.checkRaise*0.5*prof.bluff){
       const t=G.currentBet*3;
       if(t>=bot.stack)return{type:'allin'};
       return{type:'raise',amount:Math.round(t)};
     }
   }
 
-  // IP float (플랍 약한 핸드 call → 턴에서 플레이)
-  if(G.street==='flop'&&!isPfAggressor&&strength<0.4&&drawEq<0.25){
-    if(Math.random()<prof.floatFreq&&callAmt<bot.stack*0.25){
+  // 순수 드로우(strength 낮음) × 큰 벳 = 폴드. 임플라이드 좋지 않음
+  if(isBigBet&&strength<0.3&&drawEq<0.33){
+    return{type:'fold'};
+  }
+  // 오버벳 상대는 콤보드로우 아니면 드로우만으로 콜 금지
+  if(isHugeBet&&strength<0.5&&drawEq<0.5){
+    return{type:'fold'};
+  }
+  // 멀티웨이 + 큰 벳 + 미디엄 이하 = 폴드
+  if(multiway&&isBigBet&&strength<0.6){
+    // 강한 콤보드로우면 가끔 call (하지만 드물게)
+    if(drawEq>=0.45&&Math.random()<0.2)return{type:'call'};
+    return{type:'fold'};
+  }
+  // 트립스 보드 + 미디엄 이하 = 폴드 (full house 위협)
+  if(tex.trips&&strength<0.75){
+    return{type:'fold'};
+  }
+
+  // IP float (플랍, 비멀티웨이, 작은 벳 상대만)
+  if(G.street==='flop'&&!isPfAggressor&&strength<0.4&&drawEq<0.25&&!multiway&&!isBigBet){
+    if(Math.random()<prof.floatFreq*0.8&&callAmt<bot.stack*0.2){
       return{type:'call'};
     }
   }
 
-  // 블러프 캐치 (리버에서 페어로 call)
-  if(G.street==='river'&&strength>=0.4&&strength<0.7){
-    const eqAdj=strength*prof.bluffCatch;
-    if(eqAdj>potOdds+0.02){if(callAmt>=bot.stack)return{type:'allin'};return{type:'call'}}
-    if(eqAdj>potOdds-0.05&&Math.random()<0.35*prof.bluffCatch){if(callAmt>=bot.stack)return{type:'allin'};return{type:'call'}}
+  // 블러프 캐치 (리버 페어류)
+  if(G.street==='river'&&strength>=0.4&&strength<0.75){
+    const eqAdj=strength*prof.bluffCatch-texPenalty-multiwayPenalty;
+    const threshold=isBigBet?potOdds+0.03:potOdds;
+    if(eqAdj>threshold+0.03){if(callAmt>=bot.stack)return{type:'allin'};return{type:'call'}}
+    if(!isBigBet&&eqAdj>threshold-0.04&&Math.random()<0.3*prof.bluffCatch){
+      if(callAmt>=bot.stack)return{type:'allin'};return{type:'call'};
+    }
     return{type:'fold'};
   }
 
-  // 일반 콜/폴드
-  const needed=potOdds;
-  const eq=Math.min(0.95,Math.max(0.05,strength+drawEq*0.6));
-  if(eq>needed+0.05)return{type:'call'};
-  if(eq>needed-0.02&&Math.random()<0.3)return{type:'call'};
-  // 드로우 세미블러프 레이즈
-  if(drawEq>=0.35&&G.street==='flop'&&Math.random()<0.3*prof.bluff){
+  // 드로우 세미블러프 레이즈 (플랍, 콤보드로우+, 비멀티웨이, 작은 벳)
+  if(drawEq>=0.45&&G.street==='flop'&&!multiway&&!isBigBet&&Math.random()<0.32*prof.bluff){
     const t=G.currentBet*2.8;
     if(t>=bot.stack)return{type:'allin'};
     return{type:'raise',amount:Math.round(t)};
   }
+
+  // 일반 콜/폴드 — drawEq는 street-aware, strength와 별도로 합산 (더블카운트 X)
+  // 큰 벳이면 임플라이드 줄여서 drawEq 감쇠
+  const drawContrib=drawEq*(isBigBet?0.7:0.95);
+  const eq=Math.min(0.95,Math.max(0.05,strength+drawContrib-texPenalty-multiwayPenalty));
+  if(eq>potOdds+0.04)return{type:'call'};
+  if(!isBigBet&&eq>potOdds-0.02&&Math.random()<0.25)return{type:'call'};
   return{type:'fold'};
 }
 
+// 스트릿-어웨어 드로우 이쿼티 (Rule-of-4 플랍, Rule-of-2 턴)
+//   플랍: FD 0.35, OESD 0.30, 거트샷 0.15, 콤보드로우 0.55 상한
+//   턴:   FD 0.19, OESD 0.17, 거트샷 0.08, 콤보 0.32 상한
 function checkDraw(hole,board){
-  if(board.length<3)return 0;
-  const all=[...hole,...board],sc=[0,0,0,0];
-  all.forEach(c=>sc[c.suit]++);
-  const fd=sc.some(n=>n===4);
-  const rs=[...new Set(all.map(c=>c.rank))].sort((a,b)=>a-b);
-  let sd=false;for(let i=0;i<rs.length-3;i++)if(rs[i+3]-rs[i]<=4)sd=true;
-  let eq=0;if(fd)eq+=0.35;if(sd)eq+=0.17;if(fd&&sd)eq=0.55;return eq;
+  if(board.length<3||board.length>=5)return 0;
+  const all=[...hole,...board];
+  const sc=[0,0,0,0];all.forEach(c=>sc[c.suit]++);
+  const flushDraw=sc.some(n=>n===4);
+  const rs=new Set(all.map(c=>c.rank));if(rs.has(14))rs.add(1); // wheel
+  let oesd=false,gutshot=false;
+  for(let lo=1;lo<=11;lo++){
+    if([lo,lo+1,lo+2,lo+3].every(r=>rs.has(r))){
+      if(lo===1||lo===11)gutshot=true;else oesd=true;
+    }
+  }
+  if(!oesd){
+    for(let lo=1;lo<=10;lo++){
+      const hit=[lo,lo+1,lo+2,lo+3,lo+4].filter(r=>rs.has(r)).length;
+      if(hit===4){gutshot=true;break}
+    }
+  }
+  let outs=0;
+  if(flushDraw)outs+=9;
+  if(oesd)outs+=8;else if(gutshot)outs+=4;
+  if(flushDraw&&oesd)outs-=2;
+  if(flushDraw&&gutshot)outs-=1;
+  const isFlop=board.length===3;
+  return isFlop?Math.min(0.55,outs*0.037):Math.min(0.32,outs*0.021);
 }
+
+// 보드 텍스처 (페어/플러시/스트레이트 위험성)
+function boardTexture(board){
+  if(board.length<3)return{paired:false,trips:false,flush5:false,flush4:false,flush3:false,wet:false,highCard:false};
+  const rc={};const sc=[0,0,0,0];
+  board.forEach(c=>{rc[c.rank]=(rc[c.rank]||0)+1;sc[c.suit]++});
+  const pcount=Object.values(rc).filter(n=>n>=2).length;
+  const tcount=Object.values(rc).filter(n=>n>=3).length;
+  const flushN=Math.max.apply(null,sc);
+  const uniq=[...new Set(board.map(c=>c.rank))].sort((a,b)=>a-b);
+  let wet=false;
+  for(let i=0;i<uniq.length-1;i++){if(uniq[i+1]-uniq[i]<=2){wet=true;break}}
+  return{paired:pcount>0,trips:tcount>0,flush5:flushN>=5,flush4:flushN>=4,flush3:flushN>=3,wet,highCard:Math.max(...uniq)>=12};
+}
+function activePlayers(){return G.players.filter(p=>!p.folded).length}
 
 // ============================================================
 // HERO ACTION
