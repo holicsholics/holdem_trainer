@@ -474,13 +474,14 @@
 // ============================================================
 // DATA
 // ============================================================
+// BB ante 포맷 (BB 포지션 플레이어만 ante 지불, ante = bb)
 const BLINDS=[
-  {sb:50,bb:100,ante:0},{sb:75,bb:150,ante:20},{sb:100,bb:200,ante:25},
-  {sb:150,bb:300,ante:40},{sb:200,bb:400,ante:50},{sb:300,bb:600,ante:75},
-  {sb:400,bb:800,ante:100},{sb:600,bb:1200,ante:150},{sb:800,bb:1600,ante:200},
-  {sb:1200,bb:2400,ante:300}
+  {sb:50,bb:100,ante:100},{sb:75,bb:150,ante:150},{sb:100,bb:200,ante:200},
+  {sb:150,bb:300,ante:300},{sb:200,bb:400,ante:400},{sb:300,bb:600,ante:600},
+  {sb:500,bb:1000,ante:1000},{sb:800,bb:1600,ante:1600},{sb:1200,bb:2400,ante:2400},
+  {sb:2000,bb:4000,ante:4000}
 ];
-const HANDS_PER_LEVEL=6,START_STACK=30000,NUM_PLAYERS=6;
+const HANDS_PER_LEVEL=4,START_STACK=15000,NUM_PLAYERS=6;
 const BOT_NAMES=['Gus','Phil','Daniel','Vanessa','Doyle','Stu','Eli','Tom','Ivey'];
 
 // GTO Wizard 6-max MTT RFI 근사 (공개 GTO 표준 레인지 기반, mixed freq는 pure로 단순화)
@@ -545,7 +546,7 @@ const DEFEND_RANGES={
 };
 
 // ============================================================
-// SOUND (Web Audio API 합성음, 외부 파일 없음)
+// SOUND (Web Audio API 합성음)
 // ============================================================
 const SND={ctx:null,enabled:true};
 function sndInit(){
@@ -764,10 +765,15 @@ function assignPositions(){
 
 function postBlindsAndAntes(){
   const bl=BLINDS[G.level];
-  G.players.forEach(p=>{if(p.stack>0&&bl.ante>0){const a=Math.min(bl.ante,p.stack);p.stack-=a;G.pot+=a;if(p.stack===0)p.allin=true}});
   const sbP=G.players[G.sbPos],bbP=G.players[G.bbPos];
   const sb=Math.min(bl.sb,sbP.stack);sbP.stack-=sb;sbP.bet=sb;G.pot+=sb;if(sbP.stack===0)sbP.allin=true;
   const bb=Math.min(bl.bb,bbP.stack);bbP.stack-=bb;bbP.bet=bb;G.pot+=bb;if(bbP.stack===0)bbP.allin=true;
+  // BB ante — BB 포지션 플레이어만 ante 추가 지불
+  if(bl.ante>0){
+    const a=Math.min(bl.ante,bbP.stack);
+    bbP.stack-=a;G.pot+=a;
+    if(bbP.stack===0)bbP.allin=true;
+  }
   G.currentBet=bl.bb;G.lastRaise=bl.bb;
 }
 
