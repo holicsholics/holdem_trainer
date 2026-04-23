@@ -220,6 +220,12 @@
     background:linear-gradient(180deg,#fbbf24,#d97706);color:#1c1917;
     padding:14px 36px;font-size:15px;
   }
+  .btn-reveal{
+    background:linear-gradient(180deg,#475569,#1e293b);color:#e2e8f0;
+    padding:10px 18px;font-size:13px;
+  }
+  .btn-reveal.active{background:linear-gradient(180deg,#0891b2,#0e7490);color:#fff}
+  .next-bar-flex:not(.hidden){display:flex;gap:10px;align-items:center;justify-content:center}
 
   .bet-box{
     background:rgba(2,6,23,.6);border:1px solid #334155;border-radius:10px;
@@ -412,7 +418,8 @@
       </div>
 
       <!-- 다음 핸드 바 -->
-      <div id="next-bar" class="hidden fade-in">
+      <div id="next-bar" class="hidden fade-in next-bar-flex">
+        <button id="btn-reveal" class="btn-action btn-reveal">🃏 상대 카드 보기</button>
         <button id="btn-next-hand" class="btn-action btn-next">다음 핸드 ▶ <span class="text-xs opacity-70 ml-2">(Space)</span></button>
       </div>
 
@@ -974,8 +981,11 @@ function onNextHandClick(){
 function endTournament(){
   const ranking=[...G.players].sort((a,b)=>b.stack-a.stack);
   const rank=ranking.findIndex(p=>p.isHero)+1;
+  hideNextBar();hideActionBar();hideWaitBar();
   showModal('토너먼트 종료',`Hero 최종 순위: ${rank}/${NUM_PLAYERS}위\n총 ${G.hand}핸드 플레이\n\n새 토너먼트를 시작할까?`);
-  document.getElementById('modal-close').onclick=()=>{hideModal();newTournament()};
+  const btn=document.getElementById('modal-close');
+  btn.disabled=false;
+  btn.onclick=()=>{hideModal();newTournament()};
 }
 
 // ============================================================
@@ -1063,6 +1073,10 @@ function botPreflop(bot,bbStack,handKey,callAmt,potOdds){
     return{type:'fold'};
   }
 
+  // 스퀴즈 스팟 감지: 오픈 + 1명 이상 콜러 있으면 squeeze line
+  const callersBeforeMe=G.actionHistory.filter(a=>a.street==='preflop'&&a.type==='call').length;
+  const isSqueezeSpot=reraises===1&&callersBeforeMe>=1;
+
   // 3-bet 밸류 레인지 (프로필 threebetMul 기반)
   let valueRange;
   if(band==='shallow'){
@@ -1072,6 +1086,34 @@ function botPreflop(bot,bbStack,handKey,callAmt,potOdds){
     else if(prof.threebetMul>=1.0)valueRange=expandRange('TT+, AJs+, KQs, AKo, AQo');
     else if(prof.threebetMul>=0.7)valueRange=expandRange('JJ+, AQs+, AKo');
     else valueRange=expandRange('QQ+, AKs, AKo');
+  }
+
+  // ========== 스퀴즈 (오픈 + 콜러 상대 3-bet) ==========
+  if(isSqueezeSpot&&prof.threebetMul>=0.8){
+    // 밸류
+    if(valueRange.has(handKey)){
+      const szMul=2.5+callersBeforeMe; // 콜러 수에 비례해 사이즈 증가
+      const t=Math.round(G.currentBet*szMul);
+      if(bot.stack<=t*1.4)return{type:'allin'};
+      return{type:'raise',amount:t};
+    }
+    // 스퀴즈 블러프: 오픈+콜러 상대는 둘 다 상대적 약점 → 공격적 프로필은 더 자주 블러프
+    if(prof.threebetBluff>0&&BLUFF_POOL_3B.has(handKey)){
+      const squeezeBluffProb=prof.threebetBluff*1.5;
+      if(Math.random()<squeezeBluffProb){
+        const t=Math.round(G.currentBet*(2.5+callersBeforeMe));
+        if(bot.stack<=t*1.4)return{type:'allin'};
+        return{type:'raise',amount:t};
+      }
+    }
+    // 스퀴즈 안 하면 타이트하게 call range만
+    const callRangeSq=band==='deep'||band==='mid'
+      ?expandRange('55-TT, A9s-AJs, KJs+, QJs, JTs, T9s, 98s, AJo, KQo')
+      :expandRange('55-99, A9s-AJs, KQs, QJs, AJo');
+    if(callRangeSq.has(handKey)){
+      if(prof.defendWiden>=1.1){if(callAmt>=bot.stack)return{type:'allin'};return{type:'call'}}
+    }
+    return{type:'fold'};
   }
 
   // ========== BB 스팟 ==========
@@ -1186,13 +1228,18 @@ function botPostflop(bot,bbStack,callAmt,potOdds){
   const pfAggressorId=pfAggAct?pfAggAct.p:null;
   const isPfAggressor=pfAggressorId===bot.id;
   const postBetActed=G.actionHistory.some(a=>a.street===G.street&&(a.type==='raise'||a.type==='allin'));
-  // 이 스트릿에 내가 한 번이라도 공격적 베팅(raise)을 한 적 있는지
   const mePostAgg=G.actionHistory.some(a=>a.street===G.street&&a.p===bot.id&&(a.type==='raise'||a.type==='allin'));
-  // 이전 스트릿에서 내가 공격자(last aggressor)였는지 (턴 더블 배럴용)
-  const prevStreet={flop:'preflop',turn:'flop',river:'turn'}[G.street];
-  const prevAggAct=prevStreet?[...G.actionHistory].reverse().find(a=>a.street===prevStreet&&(a.type==='raise'||a.type==='allin')):null;
-  const prevAggressorId=prevAggAct?prevAggAct.p:null;
+  // 이전 스트릿들까지의 최근 aggressor (delayed c-bet 지원: PFR이 플랍 체크해도 턴에 wasPrevAggressor 유지)
+  const sIdx={preflop:0,flop:1,turn:2,river:3};
+  let prevAggressorId=null;
+  for(const a of G.actionHistory){
+    if((a.type==='raise'||a.type==='allin')&&sIdx[a.street]<sIdx[G.street])prevAggressorId=a.p;
+  }
   const wasPrevAggressor=prevAggressorId===bot.id;
+  // 스탭 기회: 현재 스트릿에서 PFR이 이미 체크했고 아무도 레이즈 X, 내가 후열
+  const pfrCheckedThis=pfAggressorId!==null&&!isPfAggressor&&
+    G.actionHistory.some(a=>a.street===G.street&&a.p===pfAggressorId&&a.type==='check')&&
+    !postBetActed;
 
   const facingBet=callAmt>0;
   if(!facingBet){
@@ -1208,24 +1255,60 @@ function botPostflop(bot,bbStack,callAmt,potOdds){
       return{type:'check'};
     }
 
-    // 이전 공격자로서 후속 배럴 결정 (턴/리버)
+    // 이전 공격자로서 후속 배럴 결정 (턴/리버, delayed c-bet 포함)
     if(wasPrevAggressor&&(G.street==='turn'||G.street==='river')){
-      // 밸류
+      // 너츠급 폴라라이즈 오버벳 (LAG/TAG 계열)
+      if(G.street==='river'&&prof.bluff>=1.1&&strength>=0.88&&!multiway&&!tex.paired&&Math.random()<0.4){
+        const sz=Math.min(bot.stack,Math.floor(G.pot*1.25));
+        if(sz>=bot.stack)return{type:'allin'};
+        return{type:'raise',amount:sz};
+      }
+      // 리버 폴라라이즈 블러프 오버벳 (러닝 플러시/스트레이트 카드 등에서)
+      if(G.street==='river'&&prof.bluff>=1.2&&strength<0.2&&!multiway&&Math.random()<0.22*prof.bluff){
+        const sz=Math.min(bot.stack,Math.floor(G.pot*1.1));
+        if(sz>=bot.stack*0.85)return{type:'check'};
+        return{type:'raise',amount:sz};
+      }
+      // 밸류 배럴
       if(strength>=0.6){
         const sz=Math.min(bot.stack,Math.floor(G.pot*(G.street==='river'?0.75:0.66)));
         if(sz>=bot.stack)return{type:'allin'};
         return{type:'raise',amount:sz};
       }
-      // 더블/트리플 배럴 블러프
-      const barrelProb=(G.street==='turn'?prof.doubleBarrel:prof.doubleBarrel*0.55)*prof.bluff;
+      // 더블/트리플 배럴 블러프 (멀티웨이는 대폭 감소)
+      const barrelProb=(G.street==='turn'?prof.doubleBarrel:prof.doubleBarrel*0.55)*prof.bluff*(multiway?0.35:1);
       if(strength<0.35&&Math.random()<barrelProb){
         const sz=Math.min(bot.stack,Math.floor(G.pot*(G.street==='river'?0.7:0.55)));
         if(sz>=bot.stack*0.85)return{type:'check'};
         return{type:'raise',amount:sz};
       }
-      // 드로우가 있으면 semi-bluff
-      if(drawEq>=0.3&&G.street==='turn'&&Math.random()<0.45*prof.bluff){
+      // 드로우 세미블러프 (턴)
+      if(drawEq>=0.3&&G.street==='turn'&&!multiway&&Math.random()<0.45*prof.bluff){
         const sz=Math.min(bot.stack,Math.floor(G.pot*0.5));
+        if(sz>=bot.stack)return{type:'allin'};
+        return{type:'raise',amount:sz};
+      }
+      return{type:'check'};
+    }
+
+    // 스탭: PFR이 체크하고 지나간 스트릿에서 IP로 약한 핸드로 베팅 (exploit line)
+    if(pfrCheckedThis&&!multiway){
+      // 밸류
+      if(strength>=0.55){
+        const sz=Math.min(bot.stack,Math.floor(G.pot*0.6));
+        if(sz>=bot.stack)return{type:'allin'};
+        return{type:'raise',amount:sz};
+      }
+      // 퓨어 블러프 스탭 (프로필 bluff×floatFreq 기반)
+      const stabProb=Math.min(0.7,prof.floatFreq*1.4*prof.bluff);
+      if(strength<0.35&&Math.random()<stabProb){
+        const sz=Math.min(bot.stack,Math.floor(G.pot*0.5));
+        if(sz>=bot.stack*0.8)return{type:'check'};
+        return{type:'raise',amount:sz};
+      }
+      // 드로우 스탭
+      if(drawEq>=0.2&&Math.random()<0.5*prof.bluff){
+        const sz=Math.min(bot.stack,Math.floor(G.pot*0.55));
         if(sz>=bot.stack)return{type:'allin'};
         return{type:'raise',amount:sz};
       }
@@ -1416,7 +1499,7 @@ function setupHeroAction(){
   const minRaise=G.currentBet+G.lastRaise;
   const maxRaise=hero.stack+hero.bet;
 
-  document.querySelectorAll('.btn-action').forEach(b=>b.disabled=false);
+  document.querySelectorAll('#action-bar .btn-action').forEach(b=>b.disabled=false);
   const checkBtn=document.querySelector('[data-act="check"]');
   const callBtn=document.querySelector('[data-act="call"]');
   if(canCheck){callBtn.style.display='none';checkBtn.style.display=''}
@@ -1457,10 +1540,10 @@ function setupHeroAction(){
   if(maxRaise<=G.currentBet)raiseBtn.disabled=true;
   updateCoach();
 
-  document.querySelectorAll('.btn-action').forEach(b=>{
+  document.querySelectorAll('#action-bar .btn-action').forEach(b=>{
     b.onclick=()=>{
       const act=b.dataset.act;
-      document.querySelectorAll('.btn-action').forEach(x=>x.disabled=true);
+      document.querySelectorAll('#action-bar .btn-action').forEach(x=>x.disabled=true);
       if(act==='fold')doAction(hero,{type:'fold'});
       else if(act==='check')doAction(hero,{type:'check'});
       else if(act==='call')doAction(hero,{type:'call'});
@@ -1892,7 +1975,11 @@ function showBubble(pid,text,type){
 
 function showActionBar(){document.getElementById('action-bar').classList.remove('hidden')}
 function hideActionBar(){document.getElementById('action-bar').classList.add('hidden')}
-function showNextBar(){document.getElementById('next-bar').classList.remove('hidden')}
+function showNextBar(){
+  document.getElementById('next-bar').classList.remove('hidden');
+  const rb=document.getElementById('btn-reveal');
+  rb.classList.remove('active');rb.textContent='🃏 상대 카드 보기';
+}
 function hideNextBar(){document.getElementById('next-bar').classList.add('hidden')}
 function showWaitBar(name){const el=document.getElementById('wait-bar');document.getElementById('wait-text').textContent=`${name} 생각 중...`;el.classList.remove('hidden')}
 function hideWaitBar(){document.getElementById('wait-bar').classList.add('hidden')}
@@ -1903,6 +1990,14 @@ function hideModal(){document.getElementById('modal').classList.add('hidden')}
 document.getElementById('modal-close').onclick=hideModal;
 document.getElementById('btn-restart').onclick=()=>{if(confirm('토너먼트를 처음부터 다시 시작할까?'))newTournament()};
 document.getElementById('btn-next-hand').onclick=onNextHandClick;
+document.getElementById('btn-reveal').onclick=()=>{
+  if(!G.waitingForNext)return;
+  const btn=document.getElementById('btn-reveal');
+  const revealing=btn.classList.toggle('active');
+  G.players.forEach(p=>{if(!p.isHero&&p.cards&&p.cards.length)p.showCards=revealing});
+  btn.textContent=revealing?'🙈 카드 숨기기':'🃏 상대 카드 보기';
+  renderSeats();
+};
 document.addEventListener('keydown',e=>{if(e.key===' '&&G.waitingForNext){e.preventDefault();onNextHandClick()}});
 
 // 사운드 토글 + 첫 클릭 시 AudioContext resume (브라우저 정책)
